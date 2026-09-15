@@ -1,0 +1,10 @@
+/target/
+engine/target/
+**/*.rs.bk
+
+.marrow/
+.DS_Store
+Thumbs.db
+
+.claude/docs
+.claude/skills

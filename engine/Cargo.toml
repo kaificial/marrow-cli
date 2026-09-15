@@ -1,0 +1,34 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/marrow-cli",
+    "crates/marrow-core",
+    "crates/marrow-store",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+marrow-core = { path = "crates/marrow-core" }
+marrow-store = { path = "crates/marrow-store" }
+clap = { version = "4", features = ["derive"] }
+gix = "0.68"
+tree-sitter = "0.24"
+tree-sitter-rust = "0.23"
+tree-sitter-python = "0.23"
+tree-sitter-typescript = "0.23"
+rusqlite = { version = "0.32", features = ["bundled"] }
+rayon = "1"
+thiserror = "2"
+
+[workspace.lints.rust]
+warnings = "deny"
+
+[workspace.lints.clippy]
+all = "deny"
+
+[profile.release]
+lto = true

@@ -1,0 +1,17 @@
+[package]
+name = "marrow-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "marrow"
+path = "src/main.rs"
+
+[dependencies]
+marrow-core.workspace = true
+marrow-store.workspace = true
+clap.workspace = true
