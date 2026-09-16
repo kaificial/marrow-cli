@@ -1,4 +1,5 @@
 set shell := ["bash", "-cu"]
+set windows-shell := ["cmd.exe", "/c"]
 
 # Build the engine workspace.
 build:
@@ -17,6 +18,22 @@ lint:
 fmt:
     cargo fmt --manifest-path engine/Cargo.toml --all
 
+python := if os_family() == "windows" { "python" } else { "python3" }
+
+# Rebuild the fixture repos and rewrite their manifests.
+fixtures:
+    {{python}} eval/generator/generate.py
+
+# Rebuild the fixture repos and fail if any manifest would change.
+fixtures-check:
+    {{python}} eval/generator/generate.py --check
+
 # Run the mutation-corpus validation harness.
-eval:
-    @echo "eval harness not built yet (see docs/BUILD_PLAN.md Phase 1)"
+eval *args: fixtures-check
+    {{python}} eval/runner/run.py {{args}} -- {{eval_engine}}
+
+# Test the grading tool itself.
+eval-selftest: fixtures-check
+    {{python}} -m unittest discover --start-directory eval/runner/tests --top-level-directory eval/runner
+
+eval_engine := python + " eval/runner/stub_engine.py"
