@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "fixture": "rename-identifier/typescript",
+  "mutation_class": "rename-identifier",
+  "language": "typescript",
+  "summary": "Rename function parseItem to parseRecord (definition, a reference inside the module, and the import and call in main.ts) and local variable parts to fields. Every line containing a renamed identifier is edited in place; all other lines are verbatim.",
+  "commits": [
+    {"id": "c0", "sha": "26514a4fd3ef3cef878affb7566198c60b6a4fa9", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory parser"},
+    {"id": "c1", "sha": "0a689af073a7c3fc14d8f0e10703f02d1fc588ec", "timestamp": "2026-01-02T00:00:00Z", "message": "rename parseItem to parseRecord"}
+  ],
+  "lines": [
+    {"line_id": "s1", "kind": "code", "text": "export interface Item {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 1}]},
+    {"line_id": "s2", "kind": "code", "text": "  name: string;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 2}]},
+    {"line_id": "s3", "kind": "code", "text": "  quantity: number;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 3}]},
+    {"line_id": "s4", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 4}]},
+    {"line_id": "d1", "kind": "comment", "text": "// Parses one \"name,quantity\" CSV row.", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 6}]},
+    {"line_id": "p1", "kind": "code", "text": "export function parseItem(line: string): Item | undefined {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 7}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.ts", "line": 7}]},
+    {"line_id": "p2", "kind": "code", "text": "  const parts = line.split(\",\");", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 8}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.ts", "line": 8}]},
+    {"line_id": "p3", "kind": "code", "text": "  if (parts.length < 2) {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 9}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.ts", "line": 9}]},
+    {"line_id": "p4", "kind": "code", "text": "    return undefined;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 10}]},
+    {"line_id": "p5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 11}]},
+    {"line_id": "p6", "kind": "code", "text": "  return { name: parts[0].trim(), quantity: Number(parts[1]) };", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 12}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.ts", "line": 12}]},
+    {"line_id": "p7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 13}]},
+    {"line_id": "a1", "kind": "code", "text": "export function parseAll(text: string): Item[] {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 15}]},
+    {"line_id": "a2", "kind": "code", "text": "  return text", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 16}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 16}]},
+    {"line_id": "a3", "kind": "code", "text": "    .split(\"\\n\")", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 17}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 17}]},
+    {"line_id": "a4", "kind": "code", "text": "    .map(parseItem)", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 18}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.ts", "line": 18}]},
+    {"line_id": "a5", "kind": "code", "text": "    .filter((item): item is Item => item !== undefined);", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 19}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 19}]},
+    {"line_id": "a6", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 20}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 20}]},
+    {"line_id": "i1", "kind": "code", "text": "export function indexByName(items: Item[]): Map<string, Item> {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 22}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 22}]},
+    {"line_id": "i2", "kind": "code", "text": "  return new Map(items.map((item) => [item.name, item]));", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 23}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 23}]},
+    {"line_id": "i3", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 24}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 24}]},
+    {"line_id": "m1", "kind": "code", "text": "import { parseItem } from \"./inventory\";", "birth": {"commit": "c0", "path": "src/main.ts", "line": 1}, "fates": [{"commit": "c1", "state": "edited", "path": "src/main.ts", "line": 1}]},
+    {"line_id": "m2", "kind": "code", "text": "const line = process.argv[2] ?? \"\";", "birth": {"commit": "c0", "path": "src/main.ts", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.ts", "line": 3}]},
+    {"line_id": "m3", "kind": "code", "text": "const item = parseItem(line);", "birth": {"commit": "c0", "path": "src/main.ts", "line": 4}, "fates": [{"commit": "c1", "state": "edited", "path": "src/main.ts", "line": 4}]},
+    {"line_id": "m4", "kind": "code", "text": "if (item === undefined) {", "birth": {"commit": "c0", "path": "src/main.ts", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.ts", "line": 5}]},
+    {"line_id": "m5", "kind": "code", "text": "  console.error(`could not parse: ${line}`);", "birth": {"commit": "c0", "path": "src/main.ts", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.ts", "line": 6}]},
+    {"line_id": "m6", "kind": "code", "text": "} else {", "birth": {"commit": "c0", "path": "src/main.ts", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.ts", "line": 7}]},
+    {"line_id": "m7", "kind": "code", "text": "  console.log(`${item.name} x${item.quantity}`);", "birth": {"commit": "c0", "path": "src/main.ts", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.ts", "line": 8}]},
+    {"line_id": "m8", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/main.ts", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.ts", "line": 9}]}
+  ]
+}

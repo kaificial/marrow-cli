@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "fixture": "rename-identifier/python",
+  "mutation_class": "rename-identifier",
+  "language": "python",
+  "summary": "Rename function parse_item to parse_record (definition, a call inside the module, and the import and call in main.py) and local variable parts to fields. Every line containing a renamed identifier is edited in place; all other lines are verbatim.",
+  "commits": [
+    {"id": "c0", "sha": "1d6a7a41adff72fce0944ee7908a439b211511e3", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory parser"},
+    {"id": "c1", "sha": "fb916c28cfe5a7b8258e4316fc0a3caac07b9963", "timestamp": "2026-01-02T00:00:00Z", "message": "rename parse_item to parse_record"}
+  ],
+  "lines": [
+    {"line_id": "f1", "kind": "code", "text": "from dataclasses import dataclass", "birth": {"commit": "c0", "path": "inventory.py", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 1}]},
+    {"line_id": "f2", "kind": "code", "text": "from typing import Dict, List, Optional", "birth": {"commit": "c0", "path": "inventory.py", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 2}]},
+    {"line_id": "k1", "kind": "code", "text": "@dataclass", "birth": {"commit": "c0", "path": "inventory.py", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 5}]},
+    {"line_id": "k2", "kind": "code", "text": "class Item:", "birth": {"commit": "c0", "path": "inventory.py", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 6}]},
+    {"line_id": "k3", "kind": "code", "text": "    name: str", "birth": {"commit": "c0", "path": "inventory.py", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 7}]},
+    {"line_id": "k4", "kind": "code", "text": "    quantity: int", "birth": {"commit": "c0", "path": "inventory.py", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 8}]},
+    {"line_id": "d1", "kind": "comment", "text": "# Parses one \"name,quantity\" CSV row.", "birth": {"commit": "c0", "path": "inventory.py", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 11}]},
+    {"line_id": "p1", "kind": "code", "text": "def parse_item(line: str) -> Optional[Item]:", "birth": {"commit": "c0", "path": "inventory.py", "line": 12}, "fates": [{"commit": "c1", "state": "edited", "path": "inventory.py", "line": 12}]},
+    {"line_id": "p2", "kind": "code", "text": "    parts = line.split(\",\")", "birth": {"commit": "c0", "path": "inventory.py", "line": 13}, "fates": [{"commit": "c1", "state": "edited", "path": "inventory.py", "line": 13}]},
+    {"line_id": "p3", "kind": "code", "text": "    if len(parts) < 2:", "birth": {"commit": "c0", "path": "inventory.py", "line": 14}, "fates": [{"commit": "c1", "state": "edited", "path": "inventory.py", "line": 14}]},
+    {"line_id": "p4", "kind": "code", "text": "        return None", "birth": {"commit": "c0", "path": "inventory.py", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 15}]},
+    {"line_id": "p5", "kind": "code", "text": "    return Item(parts[0].strip(), int(parts[1]))", "birth": {"commit": "c0", "path": "inventory.py", "line": 16}, "fates": [{"commit": "c1", "state": "edited", "path": "inventory.py", "line": 16}]},
+    {"line_id": "a1", "kind": "code", "text": "def parse_all(text: str) -> List[Item]:", "birth": {"commit": "c0", "path": "inventory.py", "line": 19}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 19}]},
+    {"line_id": "a2", "kind": "code", "text": "    return [item for item in map(parse_item, text.splitlines()) if item]", "birth": {"commit": "c0", "path": "inventory.py", "line": 20}, "fates": [{"commit": "c1", "state": "edited", "path": "inventory.py", "line": 20}]},
+    {"line_id": "i1", "kind": "code", "text": "def index_by_name(items: List[Item]) -> Dict[str, Item]:", "birth": {"commit": "c0", "path": "inventory.py", "line": 23}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 23}]},
+    {"line_id": "i2", "kind": "code", "text": "    return {item.name: item for item in items}", "birth": {"commit": "c0", "path": "inventory.py", "line": 24}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 24}]},
+    {"line_id": "m1", "kind": "code", "text": "import sys", "birth": {"commit": "c0", "path": "main.py", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 1}]},
+    {"line_id": "m2", "kind": "code", "text": "from inventory import parse_item", "birth": {"commit": "c0", "path": "main.py", "line": 3}, "fates": [{"commit": "c1", "state": "edited", "path": "main.py", "line": 3}]},
+    {"line_id": "m3", "kind": "code", "text": "def main() -> None:", "birth": {"commit": "c0", "path": "main.py", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 6}]},
+    {"line_id": "m4", "kind": "code", "text": "    item = parse_item(sys.argv[1])", "birth": {"commit": "c0", "path": "main.py", "line": 7}, "fates": [{"commit": "c1", "state": "edited", "path": "main.py", "line": 7}]},
+    {"line_id": "m5", "kind": "code", "text": "    if item is None:", "birth": {"commit": "c0", "path": "main.py", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 8}]},
+    {"line_id": "m6", "kind": "code", "text": "        print(\"could not parse\", file=sys.stderr)", "birth": {"commit": "c0", "path": "main.py", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 9}]},
+    {"line_id": "m7", "kind": "code", "text": "    else:", "birth": {"commit": "c0", "path": "main.py", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 10}]},
+    {"line_id": "m8", "kind": "code", "text": "        print(f\"{item.name} x{item.quantity}\")", "birth": {"commit": "c0", "path": "main.py", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 11}]},
+    {"line_id": "m9", "kind": "code", "text": "if __name__ == \"__main__\":", "birth": {"commit": "c0", "path": "main.py", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 14}]},
+    {"line_id": "m10", "kind": "code", "text": "    main()", "birth": {"commit": "c0", "path": "main.py", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 15}]}
+  ]
+}

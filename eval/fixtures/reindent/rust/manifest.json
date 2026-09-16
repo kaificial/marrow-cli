@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "fixture": "reindent/rust",
+  "mutation_class": "reindent",
+  "language": "rust",
+  "summary": "Wrap a for loop and the statement after it in `if !items.is_empty() { ... }`. The 4 wrapped lines are verbatim one indent level deeper; the `if` line and its closing brace are born. A verbatim statement separates the loop's `}` from the new `}`, so which brace is new is unambiguous.",
+  "commits": [
+    {"id": "c0", "sha": "650dcce382db480c78393f8ec5620da1f3b3f55f", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory index"},
+    {"id": "c1", "sha": "a47324a4797753dcf0f3c58d823dbf5860cde7f2", "timestamp": "2026-01-02T00:00:00Z", "message": "skip indexing log for empty input"}
+  ],
+  "lines": [
+    {"line_id": "u1", "kind": "code", "text": "use std::collections::HashMap;", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 1}]},
+    {"line_id": "s1", "kind": "code", "text": "pub struct Item {", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 3}]},
+    {"line_id": "s2", "kind": "code", "text": "    pub name: String,", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 4}]},
+    {"line_id": "s3", "kind": "code", "text": "    pub quantity: u32,", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 5}]},
+    {"line_id": "s4", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 6}]},
+    {"line_id": "i1", "kind": "code", "text": "pub fn index_by_name(items: Vec<Item>) -> HashMap<String, Item> {", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 8}]},
+    {"line_id": "i2", "kind": "code", "text": "    let mut index = HashMap::new();", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 9}]},
+    {"line_id": "i3", "kind": "code", "text": "    for item in items {", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 11}]},
+    {"line_id": "i4", "kind": "code", "text": "        index.insert(item.name.clone(), item);", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 12}]},
+    {"line_id": "i5", "kind": "code", "text": "    }", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 13}]},
+    {"line_id": "i6", "kind": "code", "text": "    println!(\"indexed {} items\", index.len());", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 14}]},
+    {"line_id": "i7", "kind": "code", "text": "    index", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 16}]},
+    {"line_id": "i8", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 17}]},
+    {"line_id": "r1", "kind": "code", "text": "pub fn restock(items: &mut [Item], amount: u32) {", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 17}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 19}]},
+    {"line_id": "r2", "kind": "code", "text": "    for item in items.iter_mut() {", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 18}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 20}]},
+    {"line_id": "r3", "kind": "code", "text": "        item.quantity += amount;", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 19}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 21}]},
+    {"line_id": "r4", "kind": "code", "text": "    }", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 20}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 22}]},
+    {"line_id": "r5", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.rs", "line": 21}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.rs", "line": 23}]},
+    {"line_id": "w1", "kind": "code", "text": "    if !items.is_empty() {", "birth": {"commit": "c1", "path": "src/inventory.rs", "line": 10}, "fates": []},
+    {"line_id": "w2", "kind": "code", "text": "    }", "birth": {"commit": "c1", "path": "src/inventory.rs", "line": 15}, "fates": []}
+  ]
+}

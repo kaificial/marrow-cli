@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "fixture": "reindent/python",
+  "mutation_class": "reindent",
+  "language": "python",
+  "summary": "Wrap two blocks in new conditionals (`if items:` around a loop and the print after it, `if amount > 0:` around a loop). The 5 wrapped lines are verbatim one indent level deeper; the two `if` lines are born. Both wrapped loops start with the identical line `for item in items:`.",
+  "commits": [
+    {"id": "c0", "sha": "3507522a21208795200bbf81ec662916a13d4344", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory index"},
+    {"id": "c1", "sha": "3a65bbc96075ab6d9f12e030296daf5ece58ce4b", "timestamp": "2026-01-02T00:00:00Z", "message": "guard indexing and restocking"}
+  ],
+  "lines": [
+    {"line_id": "f1", "kind": "code", "text": "from dataclasses import dataclass", "birth": {"commit": "c0", "path": "inventory.py", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 1}]},
+    {"line_id": "f2", "kind": "code", "text": "from typing import Dict, List", "birth": {"commit": "c0", "path": "inventory.py", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 2}]},
+    {"line_id": "k1", "kind": "code", "text": "@dataclass", "birth": {"commit": "c0", "path": "inventory.py", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 5}]},
+    {"line_id": "k2", "kind": "code", "text": "class Item:", "birth": {"commit": "c0", "path": "inventory.py", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 6}]},
+    {"line_id": "k3", "kind": "code", "text": "    name: str", "birth": {"commit": "c0", "path": "inventory.py", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 7}]},
+    {"line_id": "k4", "kind": "code", "text": "    quantity: int", "birth": {"commit": "c0", "path": "inventory.py", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 8}]},
+    {"line_id": "i1", "kind": "code", "text": "def index_by_name(items: List[Item]) -> Dict[str, Item]:", "birth": {"commit": "c0", "path": "inventory.py", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 11}]},
+    {"line_id": "i2", "kind": "code", "text": "    index: Dict[str, Item] = {}", "birth": {"commit": "c0", "path": "inventory.py", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 12}]},
+    {"line_id": "i3", "kind": "code", "text": "    for item in items:", "birth": {"commit": "c0", "path": "inventory.py", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 14}]},
+    {"line_id": "i4", "kind": "code", "text": "        index[item.name] = item", "birth": {"commit": "c0", "path": "inventory.py", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 15}]},
+    {"line_id": "i5", "kind": "code", "text": "    print(f\"indexed {len(index)} items\")", "birth": {"commit": "c0", "path": "inventory.py", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 16}]},
+    {"line_id": "i6", "kind": "code", "text": "    return index", "birth": {"commit": "c0", "path": "inventory.py", "line": 16}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 17}]},
+    {"line_id": "r1", "kind": "code", "text": "def restock(items: List[Item], amount: int) -> None:", "birth": {"commit": "c0", "path": "inventory.py", "line": 19}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 20}]},
+    {"line_id": "r2", "kind": "code", "text": "    for item in items:", "birth": {"commit": "c0", "path": "inventory.py", "line": 20}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 22}]},
+    {"line_id": "r3", "kind": "code", "text": "        item.quantity += amount", "birth": {"commit": "c0", "path": "inventory.py", "line": 21}, "fates": [{"commit": "c1", "state": "verbatim", "path": "inventory.py", "line": 23}]},
+    {"line_id": "w1", "kind": "code", "text": "    if items:", "birth": {"commit": "c1", "path": "inventory.py", "line": 13}, "fates": []},
+    {"line_id": "w2", "kind": "code", "text": "    if amount > 0:", "birth": {"commit": "c1", "path": "inventory.py", "line": 21}, "fates": []}
+  ]
+}

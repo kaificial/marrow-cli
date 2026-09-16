@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "fixture": "rename-file/typescript",
+  "mutation_class": "rename-file",
+  "language": "typescript",
+  "summary": "Move and rename src/inventory.ts to src/domain/stock.ts: its lines are verbatim at the new path except the header comment, which is edited; the import in main.ts is edited. In the same commit an unrelated scripts/legacyImport.ts is deleted (all lines die) and scripts/report.ts is added (all lines born); that pair shares no lines and must not be treated as a rename.",
+  "commits": [
+    {"id": "c0", "sha": "18adc67de3473c624ee22c9c006f2fe1644371a8", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory parser and legacy import script"},
+    {"id": "c1", "sha": "4871db6f53b72a615fa7a0d6ee9b05862e20be55", "timestamp": "2026-01-02T00:00:00Z", "message": "move inventory module to domain/stock; replace legacy import with report", "renames": [{"from": "src/inventory.ts", "to": "src/domain/stock.ts"}]}
+  ],
+  "lines": [
+    {"line_id": "g1", "kind": "code", "text": "import { readFileSync } from \"fs\";", "birth": {"commit": "c0", "path": "scripts/legacyImport.ts", "line": 1}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "g2", "kind": "code", "text": "const raw = readFileSync(0, \"utf8\");", "birth": {"commit": "c0", "path": "scripts/legacyImport.ts", "line": 3}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "g3", "kind": "code", "text": "const rows = raw.split(\";\").filter((row) => row !== \"\");", "birth": {"commit": "c0", "path": "scripts/legacyImport.ts", "line": 4}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "g4", "kind": "code", "text": "console.log(`${rows.length} legacy rows`);", "birth": {"commit": "c0", "path": "scripts/legacyImport.ts", "line": 5}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "d1", "kind": "comment", "text": "// Inventory rows parsed from CSV.", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 1}, "fates": [{"commit": "c1", "state": "edited", "path": "src/domain/stock.ts", "line": 1}]},
+    {"line_id": "s1", "kind": "code", "text": "export interface Item {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 2}]},
+    {"line_id": "s2", "kind": "code", "text": "  name: string;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 3}]},
+    {"line_id": "s3", "kind": "code", "text": "  quantity: number;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 4}]},
+    {"line_id": "s4", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 5}]},
+    {"line_id": "p1", "kind": "code", "text": "export function parseItem(line: string): Item | undefined {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 7}]},
+    {"line_id": "p2", "kind": "code", "text": "  const parts = line.split(\",\");", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 8}]},
+    {"line_id": "p3", "kind": "code", "text": "  if (parts.length < 2) {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 9}]},
+    {"line_id": "p4", "kind": "code", "text": "    return undefined;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 10}]},
+    {"line_id": "p5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 11}]},
+    {"line_id": "p6", "kind": "code", "text": "  return { name: parts[0].trim(), quantity: Number(parts[1]) };", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 12}]},
+    {"line_id": "p7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/domain/stock.ts", "line": 13}]},
+    {"line_id": "m1", "kind": "code", "text": "import { parseItem } from \"./inventory\";", "birth": {"commit": "c0", "path": "src/main.ts", "line": 1}, "fates": [{"commit": "c1", "state": "edited", "path": "src/main.ts", "line": 1}]},
+    {"line_id": "m2", "kind": "code", "text": "const item = parseItem(process.argv[2] ?? \"\");", "birth": {"commit": "c0", "path": "src/main.ts", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.ts", "line": 3}]},
+    {"line_id": "m3", "kind": "code", "text": "console.log(item);", "birth": {"commit": "c0", "path": "src/main.ts", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.ts", "line": 4}]},
+    {"line_id": "q1", "kind": "code", "text": "const totals = new Map<string, number>();", "birth": {"commit": "c1", "path": "scripts/report.ts", "line": 1}, "fates": []},
+    {"line_id": "q2", "kind": "code", "text": "for (const name of process.argv.slice(2)) {", "birth": {"commit": "c1", "path": "scripts/report.ts", "line": 2}, "fates": []},
+    {"line_id": "q3", "kind": "code", "text": "  totals.set(name, (totals.get(name) ?? 0) + 1);", "birth": {"commit": "c1", "path": "scripts/report.ts", "line": 3}, "fates": []},
+    {"line_id": "q4", "kind": "code", "text": "}", "birth": {"commit": "c1", "path": "scripts/report.ts", "line": 4}, "fates": []},
+    {"line_id": "q5", "kind": "code", "text": "for (const [name, count] of totals) {", "birth": {"commit": "c1", "path": "scripts/report.ts", "line": 5}, "fates": []},
+    {"line_id": "q6", "kind": "code", "text": "  console.log(`${name}: ${count}`);", "birth": {"commit": "c1", "path": "scripts/report.ts", "line": 6}, "fates": []},
+    {"line_id": "q7", "kind": "code", "text": "}", "birth": {"commit": "c1", "path": "scripts/report.ts", "line": 7}, "fates": []}
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "fixture": "reindent/typescript",
+  "mutation_class": "reindent",
+  "language": "typescript",
+  "summary": "Wrap a for loop and the statement after it in `if (items.length > 0) { ... }`. The 4 wrapped lines are verbatim one indent level deeper; the `if` line and its closing brace are born. A verbatim statement separates the loop's `}` from the new `}`, so which brace is new is unambiguous.",
+  "commits": [
+    {"id": "c0", "sha": "27b1753c2ec46b5c814bcc229b05c4e4e4490724", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory index"},
+    {"id": "c1", "sha": "0a64974f8f3ed1fb5665a6dfc373b7a1bafc65e0", "timestamp": "2026-01-02T00:00:00Z", "message": "skip indexing log for empty input"}
+  ],
+  "lines": [
+    {"line_id": "s1", "kind": "code", "text": "export interface Item {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 1}]},
+    {"line_id": "s2", "kind": "code", "text": "  name: string;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 2}]},
+    {"line_id": "s3", "kind": "code", "text": "  quantity: number;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 3}]},
+    {"line_id": "s4", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 4}]},
+    {"line_id": "i1", "kind": "code", "text": "export function indexByName(items: Item[]): Map<string, Item> {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 6}]},
+    {"line_id": "i2", "kind": "code", "text": "  const index = new Map<string, Item>();", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 7}]},
+    {"line_id": "i3", "kind": "code", "text": "  for (const item of items) {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 9}]},
+    {"line_id": "i4", "kind": "code", "text": "    index.set(item.name, item);", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 10}]},
+    {"line_id": "i5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 11}]},
+    {"line_id": "i6", "kind": "code", "text": "  console.log(`indexed ${index.size} items`);", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 12}]},
+    {"line_id": "i7", "kind": "code", "text": "  return index;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 14}]},
+    {"line_id": "i8", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 15}]},
+    {"line_id": "r1", "kind": "code", "text": "export function restock(items: Item[], amount: number): void {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 17}]},
+    {"line_id": "r2", "kind": "code", "text": "  for (const item of items) {", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 16}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 18}]},
+    {"line_id": "r3", "kind": "code", "text": "    item.quantity += amount;", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 17}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 19}]},
+    {"line_id": "r4", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 18}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 20}]},
+    {"line_id": "r5", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.ts", "line": 19}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.ts", "line": 21}]},
+    {"line_id": "w1", "kind": "code", "text": "  if (items.length > 0) {", "birth": {"commit": "c1", "path": "src/inventory.ts", "line": 8}, "fates": []},
+    {"line_id": "w2", "kind": "code", "text": "  }", "birth": {"commit": "c1", "path": "src/inventory.ts", "line": 13}, "fates": []}
+  ]
+}

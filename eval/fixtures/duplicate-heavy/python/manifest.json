@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "fixture": "duplicate-heavy/python",
+  "mutation_class": "duplicate-heavy",
+  "language": "python",
+  "summary": "validate has six guard blocks with an identical `raise ValueError(\"invalid item\")` line; two of them also log with an identical `log_rejection(item)`. Only the third block is edited: a born `log_rejection(item)` (identical to the two existing ones) is inserted, and its raise message is edited in place. Every later line shifts down by one. A matcher that pairs identical lines as a set, or by line number, mislabels the duplicates.",
+  "commits": [
+    {"id": "c0", "sha": "cbd5b6ffb63668709dbbaf43ac110e0edb43e7f2", "timestamp": "2026-01-01T00:00:00Z", "message": "add item validation"},
+    {"id": "c1", "sha": "b93f098a0c20bc538c561c6e5ea4d9f844ee1200", "timestamp": "2026-01-02T00:00:00Z", "message": "explain zero-quantity rejections"}
+  ],
+  "lines": [
+    {"line_id": "u1", "kind": "code", "text": "from inventory import Item", "birth": {"commit": "c0", "path": "validate.py", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 1}]},
+    {"line_id": "l1", "kind": "code", "text": "def log_rejection(item: Item) -> None:", "birth": {"commit": "c0", "path": "validate.py", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 4}]},
+    {"line_id": "l2", "kind": "code", "text": "    print(f\"rejected {item.name}\")", "birth": {"commit": "c0", "path": "validate.py", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 5}]},
+    {"line_id": "fn1", "kind": "code", "text": "def validate(item: Item) -> None:", "birth": {"commit": "c0", "path": "validate.py", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 8}]},
+    {"line_id": "ga1", "kind": "code", "text": "    if not item.name:", "birth": {"commit": "c0", "path": "validate.py", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 9}]},
+    {"line_id": "ga2", "kind": "code", "text": "        raise ValueError(\"invalid item\")", "birth": {"commit": "c0", "path": "validate.py", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 10}]},
+    {"line_id": "gb1", "kind": "code", "text": "    if len(item.name) > 64:", "birth": {"commit": "c0", "path": "validate.py", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 11}]},
+    {"line_id": "gb2", "kind": "code", "text": "        log_rejection(item)", "birth": {"commit": "c0", "path": "validate.py", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 12}]},
+    {"line_id": "gb3", "kind": "code", "text": "        raise ValueError(\"invalid item\")", "birth": {"commit": "c0", "path": "validate.py", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 13}]},
+    {"line_id": "gc1", "kind": "code", "text": "    if item.quantity == 0:", "birth": {"commit": "c0", "path": "validate.py", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 14}]},
+    {"line_id": "gc2", "kind": "code", "text": "        raise ValueError(\"invalid item\")", "birth": {"commit": "c0", "path": "validate.py", "line": 15}, "fates": [{"commit": "c1", "state": "edited", "path": "validate.py", "line": 16}]},
+    {"line_id": "gd1", "kind": "code", "text": "    if item.quantity > 10_000:", "birth": {"commit": "c0", "path": "validate.py", "line": 16}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 17}]},
+    {"line_id": "gd2", "kind": "code", "text": "        raise ValueError(\"invalid item\")", "birth": {"commit": "c0", "path": "validate.py", "line": 17}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 18}]},
+    {"line_id": "ge1", "kind": "code", "text": "    if item.price_cents == 0:", "birth": {"commit": "c0", "path": "validate.py", "line": 18}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 19}]},
+    {"line_id": "ge2", "kind": "code", "text": "        log_rejection(item)", "birth": {"commit": "c0", "path": "validate.py", "line": 19}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 20}]},
+    {"line_id": "ge3", "kind": "code", "text": "        raise ValueError(\"invalid item\")", "birth": {"commit": "c0", "path": "validate.py", "line": 20}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 21}]},
+    {"line_id": "gf1", "kind": "code", "text": "    if item.price_cents > 1_000_000:", "birth": {"commit": "c0", "path": "validate.py", "line": 21}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 22}]},
+    {"line_id": "gf2", "kind": "code", "text": "        raise ValueError(\"invalid item\")", "birth": {"commit": "c0", "path": "validate.py", "line": 22}, "fates": [{"commit": "c1", "state": "verbatim", "path": "validate.py", "line": 23}]},
+    {"line_id": "n1", "kind": "code", "text": "        log_rejection(item)", "birth": {"commit": "c1", "path": "validate.py", "line": 15}, "fates": []}
+  ]
+}

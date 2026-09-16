@@ -5,6 +5,9 @@ engine/target/
 .marrow/
 .DS_Store
 Thumbs.db
+__pycache__/
+
+eval/fixtures/*/*/repo/
 
 .claude/docs
 .claude/skills

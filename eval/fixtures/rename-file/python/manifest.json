@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "fixture": "rename-file/python",
+  "mutation_class": "rename-file",
+  "language": "python",
+  "summary": "Rename inventory.py to stock.py: its lines are verbatim at the new path except the header comment, which is edited; the import in main.py is edited. In the same commit an unrelated scripts/legacy_import.py is deleted (all lines die) and scripts/report.py is added (all lines born); that pair shares only the single line `import sys` and must not be treated as a rename.",
+  "commits": [
+    {"id": "c0", "sha": "b0aa93b00931938ea1932f2bd27ef5ed59836a45", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory parser and legacy import script"},
+    {"id": "c1", "sha": "c47436b1e4e60d3387d13918f286100d6e055863", "timestamp": "2026-01-02T00:00:00Z", "message": "rename inventory module to stock; replace legacy import with report", "renames": [{"from": "inventory.py", "to": "stock.py"}]}
+  ],
+  "lines": [
+    {"line_id": "d1", "kind": "comment", "text": "# Inventory rows parsed from CSV.", "birth": {"commit": "c0", "path": "inventory.py", "line": 1}, "fates": [{"commit": "c1", "state": "edited", "path": "stock.py", "line": 1}]},
+    {"line_id": "f1", "kind": "code", "text": "from dataclasses import dataclass", "birth": {"commit": "c0", "path": "inventory.py", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 2}]},
+    {"line_id": "f2", "kind": "code", "text": "from typing import Optional", "birth": {"commit": "c0", "path": "inventory.py", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 3}]},
+    {"line_id": "k1", "kind": "code", "text": "@dataclass", "birth": {"commit": "c0", "path": "inventory.py", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 6}]},
+    {"line_id": "k2", "kind": "code", "text": "class Item:", "birth": {"commit": "c0", "path": "inventory.py", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 7}]},
+    {"line_id": "k3", "kind": "code", "text": "    name: str", "birth": {"commit": "c0", "path": "inventory.py", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 8}]},
+    {"line_id": "k4", "kind": "code", "text": "    quantity: int", "birth": {"commit": "c0", "path": "inventory.py", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 9}]},
+    {"line_id": "p1", "kind": "code", "text": "def parse_item(line: str) -> Optional[Item]:", "birth": {"commit": "c0", "path": "inventory.py", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 12}]},
+    {"line_id": "p2", "kind": "code", "text": "    parts = line.split(\",\")", "birth": {"commit": "c0", "path": "inventory.py", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 13}]},
+    {"line_id": "p3", "kind": "code", "text": "    if len(parts) < 2:", "birth": {"commit": "c0", "path": "inventory.py", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 14}]},
+    {"line_id": "p4", "kind": "code", "text": "        return None", "birth": {"commit": "c0", "path": "inventory.py", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 15}]},
+    {"line_id": "p5", "kind": "code", "text": "    return Item(parts[0].strip(), int(parts[1]))", "birth": {"commit": "c0", "path": "inventory.py", "line": 16}, "fates": [{"commit": "c1", "state": "verbatim", "path": "stock.py", "line": 16}]},
+    {"line_id": "m1", "kind": "code", "text": "import sys", "birth": {"commit": "c0", "path": "main.py", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 1}]},
+    {"line_id": "m2", "kind": "code", "text": "from inventory import parse_item", "birth": {"commit": "c0", "path": "main.py", "line": 3}, "fates": [{"commit": "c1", "state": "edited", "path": "main.py", "line": 3}]},
+    {"line_id": "m3", "kind": "code", "text": "def main() -> None:", "birth": {"commit": "c0", "path": "main.py", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 6}]},
+    {"line_id": "m4", "kind": "code", "text": "    item = parse_item(sys.argv[1])", "birth": {"commit": "c0", "path": "main.py", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 7}]},
+    {"line_id": "m5", "kind": "code", "text": "    print(item)", "birth": {"commit": "c0", "path": "main.py", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 8}]},
+    {"line_id": "m6", "kind": "code", "text": "if __name__ == \"__main__\":", "birth": {"commit": "c0", "path": "main.py", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 11}]},
+    {"line_id": "m7", "kind": "code", "text": "    main()", "birth": {"commit": "c0", "path": "main.py", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "main.py", "line": 12}]},
+    {"line_id": "g1", "kind": "code", "text": "import sys", "birth": {"commit": "c0", "path": "scripts/legacy_import.py", "line": 1}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "g2", "kind": "code", "text": "raw = sys.stdin.read()", "birth": {"commit": "c0", "path": "scripts/legacy_import.py", "line": 3}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "g3", "kind": "code", "text": "rows = [row for row in raw.split(\";\") if row]", "birth": {"commit": "c0", "path": "scripts/legacy_import.py", "line": 4}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "g4", "kind": "code", "text": "print(f\"{len(rows)} legacy rows\")", "birth": {"commit": "c0", "path": "scripts/legacy_import.py", "line": 5}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "q1", "kind": "code", "text": "from collections import Counter", "birth": {"commit": "c1", "path": "scripts/report.py", "line": 1}, "fates": []},
+    {"line_id": "q2", "kind": "code", "text": "import sys", "birth": {"commit": "c1", "path": "scripts/report.py", "line": 2}, "fates": []},
+    {"line_id": "q3", "kind": "code", "text": "totals = Counter(sys.argv[1:])", "birth": {"commit": "c1", "path": "scripts/report.py", "line": 4}, "fates": []},
+    {"line_id": "q4", "kind": "code", "text": "for name, count in sorted(totals.items()):", "birth": {"commit": "c1", "path": "scripts/report.py", "line": 5}, "fates": []},
+    {"line_id": "q5", "kind": "code", "text": "    print(f\"{name}: {count}\")", "birth": {"commit": "c1", "path": "scripts/report.py", "line": 6}, "fates": []}
+  ]
+}
