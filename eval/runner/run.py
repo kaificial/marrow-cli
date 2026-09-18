@@ -135,6 +135,9 @@ def main(argv=None, out=None):
     engine = args.engine[1:] if args.engine[:1] == ["--"] else args.engine
     if not engine:
         parser.error("an engine command is required after --")
+    relative_program = os.path.join(PROJECT_ROOT, engine[0])
+    if not os.path.isabs(engine[0]) and os.path.isfile(relative_program):
+        engine = [os.path.normpath(relative_program), *engine[1:]]
 
     readme = os.path.join(EVAL_DIR, "README.md")
     try:

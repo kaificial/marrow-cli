@@ -29,11 +29,11 @@ fixtures-check:
     {{python}} eval/generator/generate.py --check
 
 # Run the mutation-corpus validation harness.
-eval *args: fixtures-check
+eval *args: fixtures-check build
     {{python}} eval/runner/run.py {{args}} -- {{eval_engine}}
 
 # Test the grading tool itself.
 eval-selftest: fixtures-check
     {{python}} -m unittest discover --start-directory eval/runner/tests --top-level-directory eval/runner
 
-eval_engine := python + " eval/runner/stub_engine.py"
+eval_engine := if os_family() == "windows" { "engine/target/debug/marrow.exe" } else { "engine/target/debug/marrow" }
