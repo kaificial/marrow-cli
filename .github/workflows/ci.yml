@@ -40,10 +40,18 @@ jobs:
         run: just test
 
   eval:
-    name: eval (fixtures + harness self-tests)
+    name: eval (mutation corpus)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -55,5 +63,8 @@ jobs:
         with:
           tool: just
 
-      - name: Verify fixtures regenerate identically and the eval harness gates correctly
+      - name: Verify fixtures regenerate identically and the grading tool gates correctly
         run: just eval-selftest
+
+      - name: Grade the engine against every fixture
+        run: just eval
