@@ -59,9 +59,10 @@ pub fn init() -> Result<Setup, String> {
     if doctor::in_build_directory(&executable) {
         setup.note(&format!(
             "the hooks run {}, a build that cargo clean deletes.\n\
-             For hooks that last, install marrow (cargo install --path engine/crates/marrow-cli)\n\
-             and run marrow init again with the installed one",
-            hook_path(&executable)
+             For hooks that last, install marrow:\n{}\n\
+             then run marrow init again with the installed one",
+            hook_path(&executable),
+            doctor::install_command(&executable)
         ));
     }
     Ok(setup)

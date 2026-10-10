@@ -286,9 +286,28 @@ pub(crate) fn in_build_directory(path: &Path) -> bool {
 /// The hook works, but only until the build directory it points into is cleaned.
 fn build_note(binary: &str) -> String {
     format!(
-        "\nit runs {binary},\na build that cargo clean deletes. For a lasting hook, install marrow\n\
-         (cargo install --path engine/crates/marrow-cli) and run marrow init again"
+        "\nit runs {binary},\na build that cargo clean deletes. For a lasting hook, install marrow:\n{}\n\
+         then run marrow init again with the installed one",
+        install_command(Path::new(binary))
     )
+}
+
+/// The command that installs marrow from the source a build came from, ready to paste from any
+/// folder. `--locked` keeps the dependency versions the project was tested with.
+pub(crate) fn install_command(binary: &Path) -> String {
+    let source = binary
+        .ancestors()
+        .nth(3)
+        .map(|engine| engine.join("crates").join("marrow-cli"))
+        .filter(|source| source.join("Cargo.toml").exists());
+    match source {
+        Some(source) => {
+            let path = source.display().to_string().replace('\\', "/");
+            let path = path.strip_prefix("//?/").unwrap_or(&path).to_owned();
+            format!("cargo install --locked --path \"{path}\"")
+        }
+        None => "cargo install --locked --path <marrow>/engine/crates/marrow-cli".to_owned(),
+    }
 }
 
 /// The quoted path at the start of `command`, when it names a marrow binary outright.
@@ -504,6 +523,14 @@ mod build_directory_tests {
         )));
         assert!(!in_build_directory(Path::new("/home/me/.cargo/bin/marrow")));
         assert!(!in_build_directory(Path::new("/opt/target/marrow")));
+    }
+
+    #[test]
+    fn without_the_source_beside_it_the_install_command_names_a_placeholder() {
+        assert_eq!(
+            super::install_command(Path::new("/nowhere/engine/target/release/marrow")),
+            "cargo install --locked --path <marrow>/engine/crates/marrow-cli"
+        );
     }
 }
 
