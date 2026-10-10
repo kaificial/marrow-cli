@@ -16,15 +16,19 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use marrow_core::align::bigram_dice;
 use marrow_core::history::{CommitInfo, Repository};
 use marrow_core::language::Language;
 use marrow_core::normalize::{normalize, Line, NORMALIZER_VERSION};
 use marrow_core::pipeline::{self, Snapshot, TrackedFile};
 use marrow_core::select::{tracked_language, tracked_source};
 use marrow_core::{path_hash, ContentId, Position, State};
-use marrow_store::{BornLine, FateRow, Origin, Recording};
+use marrow_store::{BornLine, CommitRow, FateRow, ObservedBy, Origin, Recording};
 
-use crate::capture::{engine_line, language_name, open_store, relative_path, repository_root};
+use crate::capture::{
+    backfill_unfinished, engine_line, language_name, open_store, repository_root,
+    working_tree_files, BACKFILL_UNFINISHED,
+};
 
 pub enum Outcome {
     Reconciled(Report),
@@ -70,18 +74,42 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
         return Ok(Outcome::Skipped("not inside a git repository".to_owned()));
     };
     let repository = Repository::open(&root).map_err(|error| format!("{error}"))?;
-    let Ok(head) = repository.head() else {
+    if !repository
+        .has_commits()
+        .map_err(|error| format!("{error}"))?
+    {
         return Ok(Outcome::Skipped(
             "this repository has no commits yet".to_owned(),
         ));
-    };
+    }
+    let head = repository.head().map_err(|error| format!("{error}"))?;
     let committed = pipeline::tracked_files(&repository, head.id)
         .map_err(|error| format!("can't read the tree of {}: {error}", short(&head.sha)))?;
 
     let mut store = open_store(&root)?;
     let recording = store.begin().map_err(|error| format!("{error}"))?;
+    if backfill_unfinished(&recording)? {
+        return Ok(Outcome::Skipped(BACKFILL_UNFINISHED.to_owned()));
+    }
     recording
-        .insert_commit(&head.sha, head.authored_at, head.is_merge)
+        .mark_capture_started(head.committed_at)
+        .map_err(|error| format!("{error}"))?;
+    // With nothing recorded before this commit, every line in it was already there when marrow
+    // started watching, so none of their births were seen — unless this is the root commit,
+    // where everything in it was born.
+    let births_observed = head.parents.is_empty()
+        || recording
+            .has_commits()
+            .map_err(|error| format!("{error}"))?;
+    recording
+        .insert_commit(&CommitRow {
+            sha: &head.sha,
+            authored_at: head.authored_at,
+            committed_at: head.committed_at,
+            is_merge: head.is_merge,
+            observed_by: ObservedBy::Reconcile,
+            agent_trailer: head.agent_trailer.as_deref(),
+        })
         .map_err(|error| format!("{error}"))?;
 
     // The store keeps only a hash of each path, so every path we can see is hashed and looked up
@@ -97,7 +125,7 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
         .collect();
 
     let mut report = Report::new(head.sha.clone());
-    let observed_at = head.authored_at;
+    let observed_at = head.committed_at;
     let mut alive: Vec<i64> = Vec::new();
     let mut ahead_of_head: Vec<i64> = Vec::new();
     // Files reconciliation deliberately doesn't look at: already known, or known to be ahead
@@ -244,7 +272,7 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
                     state: found.state,
                     similarity: found.similarity,
                     layer: found.layer.as_str(),
-                    line: found.new.line,
+                    at: found.new.clone(),
                     previous_seen_at: seen_at(&old_files, &found.old, observed_at),
                 },
             ));
@@ -272,6 +300,10 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
     // seeing it, which means a person wrote it.
     for (path, file) in &new_side {
         let hash = path_hash(path);
+        // A line this commit put there was born in it. One in a file the commit didn't touch
+        // was there already, from a branch or a history marrow never walked, at a time nobody
+        // recorded.
+        let born_here = births_observed && before.commit_touched(path, committed[path]);
         for line in file.lines.iter() {
             let position = Position {
                 path: path.clone(),
@@ -285,6 +317,9 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
                     file_path_hash: &hash,
                     birth_commit: Some(&head.sha),
                     birth_ts: observed_at,
+                    birth_line_number: line.number,
+                    birth_observed: born_here,
+                    birth_bigrams: &line.bigrams,
                     origin: Origin::Human,
                     session_id: None,
                     model: None,
@@ -299,12 +334,18 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
     }
 
     for (line_id, fate) in &fates {
+        let at_hash;
+        // Asked before this commit anchors anything, so a line being anchored now counts as not
+        // yet committed.
+        let before_first_commit = !recording
+            .committed(*line_id)
+            .map_err(|error| format!("{error}"))?;
         let row = match fate {
             FateKind::Changed {
                 state,
                 similarity,
                 layer,
-                line,
+                at,
                 previous_seen_at,
             } => {
                 match state {
@@ -320,15 +361,24 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
                 {
                     report.revised += 1;
                 }
+                let now = line_at(&new_side, at)?;
+                let birth = recording
+                    .birth_bigrams(*line_id)
+                    .map_err(|error| format!("{error}"))?;
+                at_hash = path_hash(&at.path);
                 FateRow {
                     line_id: *line_id,
                     observed_at,
+                    commit: Some(&head.sha),
                     previous_seen_at: Some(*previous_seen_at),
                     state: state.as_str(),
                     similarity_score: *similarity,
                     deciding_layer: layer,
                     matched_candidate_id: None,
-                    line_number: Some(*line),
+                    line_number: Some(at.line),
+                    file_path_hash: Some(&at_hash),
+                    birth_similarity: Some(bigram_dice(&birth, &now.bigrams)),
+                    before_first_commit,
                 }
             }
             FateKind::Dead {
@@ -341,6 +391,7 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
                 FateRow {
                     line_id: *line_id,
                     observed_at,
+                    commit: Some(&head.sha),
                     previous_seen_at: Some(*previous_seen_at),
                     state: State::Dead.as_str(),
                     similarity_score: *similarity,
@@ -350,6 +401,9 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
                         .and_then(|position| identity.get(position))
                         .copied(),
                     line_number: None,
+                    file_path_hash: None,
+                    birth_similarity: None,
+                    before_first_commit,
                 }
             }
         };
@@ -367,10 +421,6 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
     recording
         .mark_alive(&ahead_of_head, observed_at, None)
         .map_err(|error| format!("{error}"))?;
-    report.anchored = recording
-        .anchor_births(&alive, &head.sha)
-        .map_err(|error| format!("{error}"))?;
-
     write_snapshots(
         &recording, &head, &new_side, &languages, &committed, &identity,
     )?;
@@ -381,6 +431,12 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
                 .map_err(|error| format!("{error}"))?;
         }
     }
+    // Last, because anchoring takes a line's committed version from the files' last known
+    // states: after the commit's are written, and after any file it removed is forgotten, since
+    // a line moved out of a renamed file is briefly in both.
+    report.anchored = recording
+        .anchor_births(&alive, &head.sha)
+        .map_err(|error| format!("{error}"))?;
     recording.commit().map_err(|error| format!("{error}"))?;
     Ok(Outcome::Reconciled(report))
 }
@@ -390,7 +446,7 @@ enum FateKind {
         state: State,
         similarity: f64,
         layer: &'static str,
-        line: u32,
+        at: Position,
         previous_seen_at: i64,
     },
     Dead {
@@ -400,6 +456,18 @@ enum FateKind {
         /// Resolved to a line id only after every new line has one, births included.
         candidate: Option<Position>,
     },
+}
+
+/// The committed line at a position the comparison decided on.
+fn line_at<'a>(side: &'a Snapshot, at: &Position) -> Result<&'a Line, String> {
+    side.get(&at.path)
+        .and_then(|file| {
+            file.lines
+                .binary_search_by_key(&at.line, |line| line.number)
+                .ok()
+                .map(|index| &file.lines[index])
+        })
+        .ok_or_else(|| format!("no committed line at {}:{}", at.path, at.line))
 }
 
 /// The committed version becomes the state the next write is compared against.
@@ -415,7 +483,7 @@ fn write_snapshots(
         let snapshot = marrow_store::Snapshot {
             language: language_name(languages[path]),
             normalizer_version: NORMALIZER_VERSION,
-            observed_at: head.authored_at,
+            observed_at: head.committed_at,
             content_id: committed.get(path).map(|content| content.to_hex()),
             lines: file
                 .lines
@@ -541,40 +609,6 @@ fn same_lines(stored: &[Line], other: &[Line]) -> bool {
             .iter()
             .zip(other)
             .all(|(line, same)| line.number == same.number && line.fingerprint == same.fingerprint)
-}
-
-/// Tracked files the working tree has, so a file that was written but never committed isn't
-/// mistaken for a deleted one.
-fn working_tree_files(root: &Path) -> Vec<(String, PathBuf)> {
-    let mut paths = Vec::new();
-    let mut directories = vec![root.to_path_buf()];
-    while let Some(directory) = directories.pop() {
-        let Ok(entries) = std::fs::read_dir(&directory) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(relative) = relative_path(root, &path) else {
-                continue;
-            };
-            let Ok(kind) = entry.file_type() else {
-                continue;
-            };
-            if kind.is_dir() {
-                // No `.git` holds source, wherever it is, and anything marrow excludes by path
-                // is excluded wholesale, so neither is worth walking into.
-                if entry.file_name() == *".git"
-                    || tracked_language(&format!("{relative}/probe.rs")).is_none()
-                {
-                    continue;
-                }
-                directories.push(path);
-            } else if tracked_language(&relative).is_some() {
-                paths.push((relative, path));
-            }
-        }
-    }
-    paths
 }
 
 /// Writes `.git/hooks/post-commit`, or explains what to add when the repository already has one.

@@ -94,6 +94,7 @@ fn record(
         record::HookPayload {
             session: None,
             file: None,
+            tool: None,
         }
     };
     let (Some(session), Some(file)) = (session.or(payload.session), file.or(payload.file)) else {
@@ -102,10 +103,19 @@ fn record(
         );
         return ExitCode::from(2);
     };
-    match record::capture(&session, &file, model.as_deref()) {
-        Ok(record::Capture::Recorded { born, changed }) => {
+    match record::capture(&session, &file, model.as_deref(), payload.tool.as_deref()) {
+        Ok(record::Capture::Recorded {
+            born,
+            changed,
+            already_there,
+        }) => {
+            let already = if already_there > 0 {
+                format!(" ({already_there} already in the file, not credited to the agent)")
+            } else {
+                String::new()
+            };
             println!(
-                "marrow record: {} {} born, {} {} changed",
+                "marrow record: {} {} born, {} {} changed{already}",
                 born,
                 if born == 1 { "line" } else { "lines" },
                 changed,
