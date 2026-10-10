@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 SCHEMA_VERSION = 1
 FATE_OPS = {"=": "verbatim", "~": "edited", ">": "moved"}
-COMMENT_PREFIXES = {"rust": ("//",), "typescript": ("//",), "python": ("#",)}
+COMMENT_PREFIXES = {"rust": ("//",), "typescript": ("//",), "javascript": ("//",), "python": ("#",)}
 ROW = re.compile(r"^\s*(?:(?P<label>[A-Za-z][A-Za-z0-9_]*)\s+(?P<op>[+=~>])\s+)?\|(?P<code>.*)$")
 COMMIT_ID = re.compile(r"^c\d+$")
 AUTHOR_NAME = "Marrow Fixture"

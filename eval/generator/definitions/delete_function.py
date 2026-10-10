@@ -276,3 +276,80 @@ i7 = | }
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="delete-function",
+    language="javascript",
+    summary=(
+        "Delete function totalValue and its comment (8 lines die). Nothing else changes. The surviving "
+        "totalQuantity is identical except for its comment, signature, and accumulator line, so 5 of its "
+        "lines duplicate deleted ones and shift up into their old line numbers; main.js is untouched."
+    ),
+    commits=[
+        Commit(
+            message="add inventory totals",
+            files={
+                "src/inventory.js": r"""
+t0 + | // Sum of quantity times unit price across all items.
+t1 + | export function totalValue(items) {
+t2 + |   let total = 0;
+t3 + |   for (const item of items) {
+t4 + |     total += item.quantity * item.priceCents;
+t5 + |   }
+t6 + |   return total;
+t7 + | }
+     |
+q0 + | // Total units in stock across all items.
+q1 + | export function totalQuantity(items) {
+q2 + |   let total = 0;
+q3 + |   for (const item of items) {
+q4 + |     total += item.quantity;
+q5 + |   }
+q6 + |   return total;
+q7 + | }
+     |
+i1 + | export function indexByName(items) {
+i2 + |   const index = new Map();
+i3 + |   for (const item of items) {
+i4 + |     index.set(item.name, item);
+i5 + |   }
+i6 + |   return index;
+i7 + | }
+""",
+                "src/main.js": r"""
+m1 + | import { indexByName, totalQuantity } from "./inventory.js";
+     |
+m2 + | const items = [{ name: "widget", quantity: 3, priceCents: 250 }];
+m3 + | console.log(totalQuantity(items), indexByName(items).size);
+""",
+            },
+        ),
+        Commit(
+            message="remove unused totalValue",
+            dead="t0 t1 t2 t3 t4 t5 t6 t7",
+            files={
+                "src/inventory.js": r"""
+q0 = | // Total units in stock across all items.
+q1 = | export function totalQuantity(items) {
+q2 = |   let total = 0;
+q3 = |   for (const item of items) {
+q4 = |     total += item.quantity;
+q5 = |   }
+q6 = |   return total;
+q7 = | }
+     |
+i1 = | export function indexByName(items) {
+i2 = |   const index = new Map();
+i3 = |   for (const item of items) {
+i4 = |     index.set(item.name, item);
+i5 = |   }
+i6 = |   return index;
+i7 = | }
+""",
+                "src/main.js": UNCHANGED,
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)

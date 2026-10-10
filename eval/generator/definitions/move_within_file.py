@@ -239,3 +239,72 @@ i7 = | }
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="move-within-file",
+    language="javascript",
+    summary=(
+        "Move the 5-line helper normalizeName from the bottom of the file to the top, past 14 stable "
+        "lines. Content unchanged. The helper's lines are moved; every other line is verbatim."
+    ),
+    commits=[
+        Commit(
+            message="add inventory parser",
+            files={
+                "src/inventory.js": r"""
+p1 + | export function parseItem(line) {
+p2 + |   const parts = line.split(",");
+p3 + |   if (parts.length < 2) {
+p4 + |     return undefined;
+p5 + |   }
+p6 + |   return { name: normalizeName(parts[0]), quantity: Number(parts[1]) };
+p7 + | }
+     |
+i1 + | export function indexByName(items) {
+i2 + |   const index = new Map();
+i3 + |   for (const item of items) {
+i4 + |     index.set(item.name, item);
+i5 + |   }
+i6 + |   return index;
+i7 + | }
+     |
+n1 + | function normalizeName(raw) {
+n2 + |   const trimmed = raw.trim();
+n3 + |   const lowered = trimmed.toLowerCase();
+n4 + |   return lowered.replace(/ /g, "_");
+n5 + | }
+""",
+            },
+        ),
+        Commit(
+            message="move normalizeName above its callers",
+            files={
+                "src/inventory.js": r"""
+n1 > | function normalizeName(raw) {
+n2 > |   const trimmed = raw.trim();
+n3 > |   const lowered = trimmed.toLowerCase();
+n4 > |   return lowered.replace(/ /g, "_");
+n5 > | }
+     |
+p1 = | export function parseItem(line) {
+p2 = |   const parts = line.split(",");
+p3 = |   if (parts.length < 2) {
+p4 = |     return undefined;
+p5 = |   }
+p6 = |   return { name: normalizeName(parts[0]), quantity: Number(parts[1]) };
+p7 = | }
+     |
+i1 = | export function indexByName(items) {
+i2 = |   const index = new Map();
+i3 = |   for (const item of items) {
+i4 = |     index.set(item.name, item);
+i5 = |   }
+i6 = |   return index;
+i7 = | }
+""",
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)

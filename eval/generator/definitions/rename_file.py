@@ -290,3 +290,86 @@ q7 + | }
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="rename-file",
+    language="javascript",
+    summary=(
+        "Move and rename src/inventory.js to src/domain/stock.js: its lines are verbatim at the new path "
+        "except the header comment, which is edited; the import in main.js is edited. In the same commit an "
+        "unrelated scripts/legacyImport.js is deleted (all lines die) and scripts/report.js is added (all "
+        "lines born); that pair shares no lines and must not be treated as a rename."
+    ),
+    commits=[
+        Commit(
+            message="add inventory parser and legacy import script",
+            files={
+                "src/inventory.js": r"""
+d1 + | // Inventory rows parsed from CSV.
+p1 + | export function parseItem(line) {
+p2 + |   const parts = line.split(",");
+p3 + |   if (parts.length < 2) {
+p4 + |     return undefined;
+p5 + |   }
+p6 + |   return { name: parts[0].trim(), quantity: Number(parts[1]) };
+p7 + | }
+     |
+k1 + | export function countItems(items) {
+k2 + |   return items.reduce((total, item) => total + item.quantity, 0);
+k3 + | }
+""",
+                "src/main.js": r"""
+m1 + | import { parseItem } from "./inventory.js";
+     |
+m2 + | const item = parseItem(process.argv[2] ?? "");
+m3 + | console.log(item);
+""",
+                "scripts/legacyImport.js": r"""
+g1 + | import { readFileSync } from "fs";
+     |
+g2 + | const raw = readFileSync(0, "utf8");
+g3 + | const rows = raw.split(";").filter((row) => row !== "");
+g4 + | console.log(`${rows.length} legacy rows`);
+""",
+            },
+        ),
+        Commit(
+            message="move inventory module to domain/stock; replace legacy import with report",
+            renames={"src/inventory.js": "src/domain/stock.js"},
+            dead="g1 g2 g3 g4",
+            files={
+                "src/domain/stock.js": r"""
+d1 ~ | // Stock rows parsed from CSV.
+p1 = | export function parseItem(line) {
+p2 = |   const parts = line.split(",");
+p3 = |   if (parts.length < 2) {
+p4 = |     return undefined;
+p5 = |   }
+p6 = |   return { name: parts[0].trim(), quantity: Number(parts[1]) };
+p7 = | }
+     |
+k1 = | export function countItems(items) {
+k2 = |   return items.reduce((total, item) => total + item.quantity, 0);
+k3 = | }
+""",
+                "src/main.js": r"""
+m1 ~ | import { parseItem } from "./domain/stock.js";
+     |
+m2 = | const item = parseItem(process.argv[2] ?? "");
+m3 = | console.log(item);
+""",
+                "scripts/report.js": r"""
+q1 + | const totals = new Map();
+q2 + | for (const name of process.argv.slice(2)) {
+q3 + |   totals.set(name, (totals.get(name) ?? 0) + 1);
+q4 + | }
+q5 + | for (const [name, count] of totals) {
+q6 + |   console.log(`${name}: ${count}`);
+q7 + | }
+""",
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)

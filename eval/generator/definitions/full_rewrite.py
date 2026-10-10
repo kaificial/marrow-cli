@@ -253,3 +253,82 @@ x25 + | }
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="full-rewrite",
+    language="javascript",
+    summary=(
+        "Replace src/inventory.js wholesale with a different design (Record class plus an Inventory "
+        "class). Every old line dies and every new line is born, including new `}` and `  }` lines whose "
+        "text exactly matches old ones. src/money.js is untouched."
+    ),
+    commits=[
+        Commit(
+            message="add inventory parser",
+            files={
+                "src/inventory.js": r"""
+p1 + | export function parseItem(line) {
+p2 + |   const parts = line.split(",");
+p3 + |   if (parts.length < 2) {
+p4 + |     return undefined;
+p5 + |   }
+p6 + |   return { name: parts[0].trim(), quantity: Number(parts[1]) };
+p7 + | }
+     |
+i1 + | export function indexByName(items) {
+i2 + |   const index = new Map();
+i3 + |   for (const item of items) {
+i4 + |     index.set(item.name, item);
+i5 + |   }
+i6 + |   return index;
+i7 + | }
+""",
+                "src/money.js": r"""
+g1 + | export function formatCents(cents) {
+g2 + |   return `$${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+g3 + | }
+""",
+            },
+        ),
+        Commit(
+            message="rewrite inventory around Record and Inventory",
+            dead="p1 p2 p3 p4 p5 p6 p7 i1 i2 i3 i4 i5 i6 i7",
+            files={
+                "src/inventory.js": r"""
+x1  + | export class Record {
+x2  + |   constructor(sku, count) {
+x3  + |     this.sku = sku;
+x4  + |     this.count = count;
+x5  + |   }
+      |
+x6  + |   static fromCsv(row) {
+x7  + |     const [sku, count] = row.split(",", 2);
+x8  + |     if (count === undefined) {
+x9  + |       throw new Error(`missing count in ${row}`);
+x10 + |     }
+x11 + |     return new Record(sku.trim(), Number.parseInt(count, 10));
+x12 + |   }
+x13 + | }
+      |
+x14 + | export class Inventory {
+x15 + |   #records = new Map();
+      |
+x16 + |   load(rows) {
+x17 + |     for (const row of rows) {
+x18 + |       const record = Record.fromCsv(row);
+x19 + |       this.#records.set(record.sku, record);
+x20 + |     }
+x21 + |   }
+      |
+x22 + |   get(sku) {
+x23 + |     return this.#records.get(sku);
+x24 + |   }
+x25 + | }
+""",
+                "src/money.js": UNCHANGED,
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)

@@ -348,3 +348,94 @@ m6 = | console.log(`total: ${totalValue(items)}`);
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="move-across-files",
+    language="javascript",
+    summary=(
+        "Extract function totalValue from src/inventory.js into a new src/pricing.js. Its 6 lines are "
+        "moved unchanged; the import of totalValue in main.js is edited to the new module. totalQuantity "
+        "stays behind and shares the identical lines `return items.reduce(`, `0,`, `);`, and `}` with "
+        "the moved function."
+    ),
+    commits=[
+        Commit(
+            message="add inventory valuation",
+            files={
+                "src/inventory.js": r"""
+p1 + | export function parseItem(line) {
+p2 + |   const [name, quantity, priceCents] = line.split(",");
+p3 + |   if (priceCents === undefined) {
+p4 + |     return undefined;
+p5 + |   }
+p6 + |   return { name: name.trim(), quantity: +quantity, priceCents: +priceCents };
+p7 + | }
+     |
+t1 + | export function totalValue(items) {
+t2 + |   return items.reduce(
+t3 + |     (sum, item) => sum + item.quantity * item.priceCents,
+t4 + |     0,
+t5 + |   );
+t6 + | }
+     |
+q1 + | export function totalQuantity(items) {
+q2 + |   return items.reduce(
+q3 + |     (sum, item) => sum + item.quantity,
+q4 + |     0,
+q5 + |   );
+q6 + | }
+""",
+                "src/main.js": r"""
+m1 + | import { readFileSync } from "fs";
+m2 + | import { parseItem } from "./inventory.js";
+m3 + | import { totalValue } from "./inventory.js";
+     |
+m4 + | const lines = readFileSync(process.argv[2], "utf8").split("\n");
+m5 + | const items = lines.flatMap((line) => parseItem(line) ?? []);
+m6 + | console.log(`total: ${totalValue(items)}`);
+""",
+            },
+        ),
+        Commit(
+            message="extract pricing module",
+            files={
+                "src/inventory.js": r"""
+p1 = | export function parseItem(line) {
+p2 = |   const [name, quantity, priceCents] = line.split(",");
+p3 = |   if (priceCents === undefined) {
+p4 = |     return undefined;
+p5 = |   }
+p6 = |   return { name: name.trim(), quantity: +quantity, priceCents: +priceCents };
+p7 = | }
+     |
+q1 = | export function totalQuantity(items) {
+q2 = |   return items.reduce(
+q3 = |     (sum, item) => sum + item.quantity,
+q4 = |     0,
+q5 = |   );
+q6 = | }
+""",
+                "src/pricing.js": r"""
+r1 + | // Prices are whole cents, so totals never round.
+t1 > | export function totalValue(items) {
+t2 > |   return items.reduce(
+t3 > |     (sum, item) => sum + item.quantity * item.priceCents,
+t4 > |     0,
+t5 > |   );
+t6 > | }
+""",
+                "src/main.js": r"""
+m1 = | import { readFileSync } from "fs";
+m2 = | import { parseItem } from "./inventory.js";
+m3 ~ | import { totalValue } from "./pricing.js";
+     |
+m4 = | const lines = readFileSync(process.argv[2], "utf8").split("\n");
+m5 = | const items = lines.flatMap((line) => parseItem(line) ?? []);
+m6 = | console.log(`total: ${totalValue(items)}`);
+""",
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)

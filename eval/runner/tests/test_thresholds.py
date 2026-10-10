@@ -17,7 +17,7 @@ class ThresholdTest(unittest.TestCase):
 
     def test_real_readme_records_zero_errors_for_every_fixture(self):
         names = [name for name, _, _ in discover_fixtures(os.path.join(EVAL_DIR, "fixtures"))]
-        self.assertEqual(len(names), 27)
+        self.assertEqual(len(names), 36)
         thresholds = load_thresholds(os.path.join(EVAL_DIR, "README.md"), names)
         self.assertEqual(thresholds, {name: 0 for name in names})
 

@@ -201,3 +201,64 @@ i7  = | }
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="format-only",
+    language="javascript",
+    summary=(
+        "prettier applied to hand-spaced code: brace and operator spacing, indent width 4 to 2, a triple "
+        "blank line collapsed. No line splits, joins, quote or semicolon changes."
+    ),
+    commits=[
+        Commit(
+            message="add inventory parser",
+            files={
+                "src/inventory.js": r"""
+cm1 + | // Parsed inventory row.
+p1  + | export function parseItem(line){
+p2  + |     const parts=line.split(",");
+p3  + |     if(parts.length<2){
+p4  + |         return undefined;
+p5  + |     }
+p6  + |     return {name:parts[0].trim(),quantity:Number(parts[1])};
+p7  + | }
+      |
+      |
+      |
+i1  + | export function indexByName(items){
+i2  + |     const index=new Map();
+i3  + |     for(const item of items){
+i4  + |         index.set(item.name,item);
+i5  + |     }
+i6  + |     return index;
+i7  + | }
+""",
+            },
+        ),
+        Commit(
+            message="run prettier",
+            files={
+                "src/inventory.js": r"""
+cm1 = | // Parsed inventory row.
+p1  = | export function parseItem(line) {
+p2  = |   const parts = line.split(",");
+p3  = |   if (parts.length < 2) {
+p4  = |     return undefined;
+p5  = |   }
+p6  = |   return { name: parts[0].trim(), quantity: Number(parts[1]) };
+p7  = | }
+      |
+i1  = | export function indexByName(items) {
+i2  = |   const index = new Map();
+i3  = |   for (const item of items) {
+i4  = |     index.set(item.name, item);
+i5  = |   }
+i6  = |   return index;
+i7  = | }
+""",
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)

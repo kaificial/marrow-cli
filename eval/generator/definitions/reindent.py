@@ -207,3 +207,61 @@ r5 = | }
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="reindent",
+    language="javascript",
+    summary=(
+        "Wrap a for loop and the statement after it in `if (items.length > 0) { ... }`. The 4 wrapped "
+        "lines are verbatim one indent level deeper; the `if` line and its closing brace are born. A "
+        "verbatim statement separates the loop's `}` from the new `}`, so which brace is new is unambiguous."
+    ),
+    commits=[
+        Commit(
+            message="add inventory index",
+            files={
+                "src/inventory.js": r"""
+i1 + | export function indexByName(items) {
+i2 + |   const index = new Map();
+i3 + |   for (const item of items) {
+i4 + |     index.set(item.name, item);
+i5 + |   }
+i6 + |   console.log(`indexed ${index.size} items`);
+i7 + |   return index;
+i8 + | }
+     |
+r1 + | export function restock(items, amount) {
+r2 + |   for (const item of items) {
+r3 + |     item.quantity += amount;
+r4 + |   }
+r5 + | }
+""",
+            },
+        ),
+        Commit(
+            message="skip indexing log for empty input",
+            files={
+                "src/inventory.js": r"""
+i1 = | export function indexByName(items) {
+i2 = |   const index = new Map();
+w1 + |   if (items.length > 0) {
+i3 = |     for (const item of items) {
+i4 = |       index.set(item.name, item);
+i5 = |     }
+i6 = |     console.log(`indexed ${index.size} items`);
+w2 + |   }
+i7 = |   return index;
+i8 = | }
+     |
+r1 = | export function restock(items, amount) {
+r2 = |   for (const item of items) {
+r3 = |     item.quantity += amount;
+r4 = |   }
+r5 = | }
+""",
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)

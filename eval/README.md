@@ -22,7 +22,7 @@ seen.
 
 | Command | What it does |
 |---|---|
-| `just fixtures` | Rebuild all 27 fixture repos and rewrite their manifests |
+| `just fixtures` | Rebuild all 36 fixture repos and rewrite their manifests |
 | `just fixtures-check` | Rebuild the repos and fail if any committed manifest (including its commit hashes) would change |
 | `just eval` | Grade the engine against every fixture. Exits with 0 if all pass, 1 if any fixture has more errors than allowed, and 2 if something went wrong before grading |
 | `just eval --only duplicate-heavy --show 0` | Grade only the fixtures whose name contains the given text, and list every wrong line |
@@ -99,30 +99,39 @@ the second table below, so keep that column in the form `0 errors`.
 | format-only/rust | Run through rustfmt: spacing fixed, indentation changed from 2 to 4 spaces, a double blank line reduced to one | 0 errors |
 | format-only/python | Run through black: spacing fixed, indentation changed from 2 to 4 spaces, blank lines added between definitions, a triple blank line reduced to two | 0 errors |
 | format-only/typescript | Run through prettier: spacing fixed, indentation changed from 4 to 2 spaces, a triple blank line reduced to one | 0 errors |
+| format-only/javascript | Run through prettier: spacing fixed, indentation changed from 4 to 2 spaces, a triple blank line reduced to one | 0 errors |
 | rename-identifier/rust | `parse_item` renamed to `parse_record` in two files, and `parts` to `fields`; 7 lines edited | 0 errors |
 | rename-identifier/python | `parse_item` renamed to `parse_record` in two files, and `parts` to `fields`; 7 lines edited | 0 errors |
 | rename-identifier/typescript | `parseItem` renamed to `parseRecord` in two files, and `parts` to `fields`; 7 lines edited | 0 errors |
+| rename-identifier/javascript | `parseItem` renamed to `parseRecord` in two files, and `parts` to `fields`; 7 lines edited | 0 errors |
 | rename-file/rust | `src/inventory.rs` renamed to `src/stock.rs`, with its doc comment edited and `main.rs` updated. `src/bin/legacy_import.rs` is deleted and an unrelated `src/bin/report.rs` added; they share only `fn main() {` and `}` | 0 errors |
 | rename-file/python | `inventory.py` renamed to `stock.py`, with its header comment edited and the import in `main.py` updated. `scripts/legacy_import.py` is deleted and an unrelated `scripts/report.py` added; they share only `import sys` | 0 errors |
 | rename-file/typescript | `src/inventory.ts` moved and renamed to `src/domain/stock.ts`, with its header comment edited and the import in `main.ts` updated. `scripts/legacyImport.ts` is deleted and an unrelated `scripts/report.ts` added; they share no lines | 0 errors |
+| rename-file/javascript | `src/inventory.js` moved and renamed to `src/domain/stock.js`, with its header comment edited and the import in `main.js` updated. `scripts/legacyImport.js` is deleted and an unrelated `scripts/report.js` added; they share no lines | 0 errors |
 | move-within-file/rust | A 5-line helper function moved from the top of the file to the bottom, past 17 unchanged lines | 0 errors |
 | move-within-file/python | A 4-line helper function moved from the top of the file to the middle, past 9 unchanged lines | 0 errors |
 | move-within-file/typescript | A 5-line helper function moved from the bottom of the file to the top, past 18 unchanged lines | 0 errors |
+| move-within-file/javascript | A 5-line helper function moved from the bottom of the file to the top, past 14 unchanged lines | 0 errors |
 | move-across-files/rust | `total_value` moved into a new `src/pricing.rs`; the `use` line in `main.rs` edited and a `mod pricing;` line added | 0 errors |
 | move-across-files/python | `total_value` moved into a new `pricing.py`; the import in `main.py` edited | 0 errors |
 | move-across-files/typescript | `totalValue` moved into a new `src/pricing.ts`; the import in `main.ts` edited | 0 errors |
+| move-across-files/javascript | `totalValue` moved into a new `src/pricing.js`; the import in `main.js` edited | 0 errors |
 | delete-function/rust | `total_value` and its doc comment deleted (7 lines); the similar `most_valuable` below moves up into their line numbers | 0 errors |
 | delete-function/python | `total_value` and its comment deleted (5 lines); the similar `most_valuable` below moves up into their line numbers | 0 errors |
 | delete-function/typescript | `totalValue` and its comment deleted (8 lines); `totalQuantity` below shares 5 identical lines with it and moves up | 0 errors |
+| delete-function/javascript | `totalValue` and its comment deleted (8 lines); `totalQuantity` below shares 5 identical lines with it and moves up | 0 errors |
 | reindent/rust | A loop and the line after it wrapped in an `if`: 2 new lines, and 4 kept lines now indented one level deeper | 0 errors |
 | reindent/python | Two blocks each wrapped in an `if`, which needs no closing line in Python: 2 new lines, and 5 kept lines indented deeper | 0 errors |
 | reindent/typescript | A loop and the line after it wrapped in an `if`: 2 new lines, and 4 kept lines now indented one level deeper | 0 errors |
+| reindent/javascript | A loop and the line after it wrapped in an `if`: 2 new lines, and 4 kept lines now indented one level deeper | 0 errors |
 | full-rewrite/rust | `src/inventory.rs` rewritten from scratch: 18 lines deleted and 28 added, including an identical import and several `}` lines; `money.rs` unchanged | 0 errors |
 | full-rewrite/python | `inventory.py` rewritten from scratch: 15 lines deleted and 21 added, including an identical `typing` import; `money.py` unchanged | 0 errors |
 | full-rewrite/typescript | `src/inventory.ts` rewritten from scratch: 18 lines deleted and 25 added, including several identical `}` lines; `money.ts` unchanged | 0 errors |
+| full-rewrite/javascript | `src/inventory.js` rewritten from scratch: 14 lines deleted and 25 added, including several identical `}` lines; `money.js` unchanged | 0 errors |
 | duplicate-heavy/rust | Six `if` checks all end in the same `return Err(...)` line. The third check gets a new logging line, identical to ones in other checks, and a different error message, which shifts every line below it | 0 errors |
 | duplicate-heavy/python | The same change, with `raise ValueError("invalid item")` | 0 errors |
 | duplicate-heavy/typescript | The same change, with `throw new Error("invalid item");` | 0 errors |
+| duplicate-heavy/javascript | The same change in plain JavaScript, with `throw new Error("invalid item");` | 0 errors |
 
 Each manifest's `summary` field describes its fixture in more detail, and
 `just fixtures` prints how many lines of each fate every fixture has.

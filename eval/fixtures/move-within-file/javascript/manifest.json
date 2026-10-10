@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "fixture": "move-within-file/javascript",
+  "mutation_class": "move-within-file",
+  "language": "javascript",
+  "summary": "Move the 5-line helper normalizeName from the bottom of the file to the top, past 14 stable lines. Content unchanged. The helper's lines are moved; every other line is verbatim.",
+  "commits": [
+    {"id": "c0", "sha": "c17bdf7783df031a91b3b19b5c4382224e1bbccc", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory parser"},
+    {"id": "c1", "sha": "b14798fb6ce1ef7aee0c936b9a06ec1863ec7072", "timestamp": "2026-01-02T00:00:00Z", "message": "move normalizeName above its callers"}
+  ],
+  "lines": [
+    {"line_id": "p1", "kind": "code", "text": "export function parseItem(line) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 7}]},
+    {"line_id": "p2", "kind": "code", "text": "  const parts = line.split(\",\");", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 8}]},
+    {"line_id": "p3", "kind": "code", "text": "  if (parts.length < 2) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 9}]},
+    {"line_id": "p4", "kind": "code", "text": "    return undefined;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 10}]},
+    {"line_id": "p5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 11}]},
+    {"line_id": "p6", "kind": "code", "text": "  return { name: normalizeName(parts[0]), quantity: Number(parts[1]) };", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 12}]},
+    {"line_id": "p7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 13}]},
+    {"line_id": "i1", "kind": "code", "text": "export function indexByName(items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 15}]},
+    {"line_id": "i2", "kind": "code", "text": "  const index = new Map();", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 16}]},
+    {"line_id": "i3", "kind": "code", "text": "  for (const item of items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 17}]},
+    {"line_id": "i4", "kind": "code", "text": "    index.set(item.name, item);", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 18}]},
+    {"line_id": "i5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 19}]},
+    {"line_id": "i6", "kind": "code", "text": "  return index;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 20}]},
+    {"line_id": "i7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 21}]},
+    {"line_id": "n1", "kind": "code", "text": "function normalizeName(raw) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 17}, "fates": [{"commit": "c1", "state": "moved", "path": "src/inventory.js", "line": 1}]},
+    {"line_id": "n2", "kind": "code", "text": "  const trimmed = raw.trim();", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 18}, "fates": [{"commit": "c1", "state": "moved", "path": "src/inventory.js", "line": 2}]},
+    {"line_id": "n3", "kind": "code", "text": "  const lowered = trimmed.toLowerCase();", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 19}, "fates": [{"commit": "c1", "state": "moved", "path": "src/inventory.js", "line": 3}]},
+    {"line_id": "n4", "kind": "code", "text": "  return lowered.replace(/ /g, \"_\");", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 20}, "fates": [{"commit": "c1", "state": "moved", "path": "src/inventory.js", "line": 4}]},
+    {"line_id": "n5", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 21}, "fates": [{"commit": "c1", "state": "moved", "path": "src/inventory.js", "line": 5}]}
+  ]
+}

@@ -309,3 +309,91 @@ m8 = | }
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="rename-identifier",
+    language="javascript",
+    summary=(
+        "Rename function parseItem to parseRecord (definition, a reference inside the module, and the "
+        "import and call in main.js) and local variable parts to fields. Every line containing a renamed "
+        "identifier is edited in place; all other lines are verbatim."
+    ),
+    commits=[
+        Commit(
+            message="add inventory parser",
+            files={
+                "src/inventory.js": r"""
+d1 + | // Parses one "name,quantity" CSV row.
+p1 + | export function parseItem(line) {
+p2 + |   const parts = line.split(",");
+p3 + |   if (parts.length < 2) {
+p4 + |     return undefined;
+p5 + |   }
+p6 + |   return { name: parts[0].trim(), quantity: Number(parts[1]) };
+p7 + | }
+     |
+a1 + | export function parseAll(text) {
+a2 + |   return text
+a3 + |     .split("\n")
+a4 + |     .map(parseItem)
+a5 + |     .filter((item) => item !== undefined);
+a6 + | }
+     |
+i1 + | export function indexByName(items) {
+i2 + |   return new Map(items.map((item) => [item.name, item]));
+i3 + | }
+""",
+                "src/main.js": r"""
+m1 + | import { parseItem } from "./inventory.js";
+     |
+m2 + | const line = process.argv[2] ?? "";
+m3 + | const item = parseItem(line);
+m4 + | if (item === undefined) {
+m5 + |   console.error(`could not parse: ${line}`);
+m6 + | } else {
+m7 + |   console.log(`${item.name} x${item.quantity}`);
+m8 + | }
+""",
+            },
+        ),
+        Commit(
+            message="rename parseItem to parseRecord",
+            files={
+                "src/inventory.js": r"""
+d1 = | // Parses one "name,quantity" CSV row.
+p1 ~ | export function parseRecord(line) {
+p2 ~ |   const fields = line.split(",");
+p3 ~ |   if (fields.length < 2) {
+p4 = |     return undefined;
+p5 = |   }
+p6 ~ |   return { name: fields[0].trim(), quantity: Number(fields[1]) };
+p7 = | }
+     |
+a1 = | export function parseAll(text) {
+a2 = |   return text
+a3 = |     .split("\n")
+a4 ~ |     .map(parseRecord)
+a5 = |     .filter((item) => item !== undefined);
+a6 = | }
+     |
+i1 = | export function indexByName(items) {
+i2 = |   return new Map(items.map((item) => [item.name, item]));
+i3 = | }
+""",
+                "src/main.js": r"""
+m1 ~ | import { parseRecord } from "./inventory.js";
+     |
+m2 = | const line = process.argv[2] ?? "";
+m3 ~ | const item = parseRecord(line);
+m4 = | if (item === undefined) {
+m5 = |   console.error(`could not parse: ${line}`);
+m6 = | } else {
+m7 = |   console.log(`${item.name} x${item.quantity}`);
+m8 = | }
+""",
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)
