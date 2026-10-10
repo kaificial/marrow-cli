@@ -286,8 +286,8 @@ pub(crate) fn in_build_directory(path: &Path) -> bool {
 /// The hook works, but only until the build directory it points into is cleaned.
 fn build_note(binary: &str) -> String {
     format!(
-        "\nit runs {binary}, a build that cargo clean deletes. For a lasting hook,\n\
-         install marrow (cargo install --path engine/crates/marrow-cli) and run marrow init again"
+        "\nit runs {binary},\na build that cargo clean deletes. For a lasting hook, install marrow\n\
+         (cargo install --path engine/crates/marrow-cli) and run marrow init again"
     )
 }
 
