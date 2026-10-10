@@ -2,6 +2,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod backfill;
 mod capture;
 mod reconcile;
 mod record;
@@ -37,6 +38,13 @@ enum Command {
         #[arg(long)]
         hook: bool,
     },
+    /// Record the history of the repository in the current directory, from before marrow was
+    /// watching. Resumes where it stopped if it was interrupted.
+    Backfill {
+        /// Only the last N commits, or commits made on or after a date (YYYY-MM-DD, UTC).
+        #[arg(long)]
+        since: Option<String>,
+    },
     /// Reconcile what marrow knows against HEAD, and checkpoint every line at that commit.
     Reconcile {
         /// Path to the local git repository. Defaults to the current directory.
@@ -70,6 +78,7 @@ fn main() -> ExitCode {
             model,
             hook,
         }) => record(session, file, model, hook),
+        Some(Command::Backfill { since }) => backfill_command(since.as_deref()),
         Some(Command::Reconcile { repo, install }) => reconcile_command(repo.as_deref(), install),
     }
 }
@@ -131,6 +140,88 @@ fn record(
             eprintln!("marrow record: {message}");
             ExitCode::FAILURE
         }
+    }
+}
+
+fn backfill_command(since: Option<&str>) -> ExitCode {
+    let since = match since.map(backfill::Since::parse).transpose() {
+        Ok(since) => since,
+        Err(message) => {
+            eprintln!("marrow backfill: {message}");
+            return ExitCode::from(2);
+        }
+    };
+    match backfill::backfill(since) {
+        Ok(backfill::Outcome::Done(summary)) => {
+            let counts = summary.counts;
+            let through = backfill::short(&summary.through);
+            if summary.commits == 0 {
+                println!("marrow backfill: already recorded through {through}");
+            } else {
+                println!(
+                    "marrow backfill: {} {} {} through {through}",
+                    if summary.resumed {
+                        "resumed and recorded"
+                    } else {
+                        "recorded"
+                    },
+                    summary.commits,
+                    plural(summary.commits as i64, "commit", "commits")
+                );
+            }
+            println!(
+                "  in total: {} {} ({} {}), {} lines born, {} edits, {} moves, {} deaths, \
+                 {} lines alive",
+                counts.commits,
+                plural(counts.commits, "commit", "commits"),
+                counts.merges,
+                plural(counts.merges, "merge", "merges"),
+                counts.lines,
+                counts.edited,
+                counts.moved,
+                counts.dead,
+                counts.alive
+            );
+            if counts.trailer_commits > 0 {
+                println!(
+                    "  {} {} Claude Code's co-author trailer. Their lines stay labelled human; \
+                     the trailer is stored with the commit.",
+                    counts.trailer_commits,
+                    plural(counts.trailer_commits, "commit carries", "commits carry")
+                );
+            }
+            for (sha, path) in &summary.carried {
+                eprintln!(
+                    "marrow backfill: tree-sitter gave up on {path} at {}; kept its previous \
+                     version's lines",
+                    backfill::short(sha)
+                );
+            }
+            for (sha, path) in &summary.skipped {
+                eprintln!(
+                    "marrow backfill: tree-sitter gave up on {path} at {}; not tracked until a \
+                     version of it parses",
+                    backfill::short(sha)
+                );
+            }
+            ExitCode::SUCCESS
+        }
+        Ok(backfill::Outcome::Nothing(reason)) => {
+            println!("marrow backfill: {reason}");
+            ExitCode::SUCCESS
+        }
+        Err(message) => {
+            eprintln!("marrow backfill: {message}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn plural(count: i64, one: &'static str, many: &'static str) -> &'static str {
+    if count == 1 {
+        one
+    } else {
+        many
     }
 }
 
