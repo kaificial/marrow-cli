@@ -1,4 +1,5 @@
-"""PostToolUse hook: tell marrow about a file the agent just wrote.
+"""Claude Code hook: tell marrow about the agent's writes, from Edit and Write, and from Bash
+commands (marrow notes the files before a command and records what it changed after).
 
 Capture must never get in the way of the write itself, so a missing binary or an
 unbuilt engine is silent, and nothing here can block a tool call. A record that
