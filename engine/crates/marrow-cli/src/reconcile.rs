@@ -52,6 +52,8 @@ pub struct Report {
     pub revised: usize,
     /// Lines a checkout had taken out of sight that came back unchanged, with their identity.
     pub restored: usize,
+    /// Lines last seen on commits that history no longer holds, censored rather than killed.
+    pub set_aside: usize,
     /// Files in HEAD that tree-sitter gave up on, whose lines were left untouched.
     pub unparsed: Vec<String>,
     /// Files whose contents changed without this commit changing them, so the committed version
@@ -281,9 +283,24 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
             ));
         }
     }
+    let mut kept_history = KeptHistory::new(&repository, &head);
     for death in &decisions.deaths {
         let line_id = line_id(&old_files, &death.old)?;
-        if rebaselined.contains(&death.old.path) {
+        // A line last seen on a commit HEAD's history no longer holds was on history that was
+        // reset, amended or rebased away. That isn't evidence it died: most often the commits
+        // just moved to another branch (ADR 0017). Like a line a checkout hid, it is censored at
+        // its last sighting and parked, not killed.
+        let discarded = match recording
+            .last_seen_commit(line_id)
+            .map_err(|error| format!("{error}"))?
+        {
+            Some(commit) => !kept_history.contains(&commit),
+            None => false,
+        };
+        if discarded {
+            report.set_aside += 1;
+        }
+        if discarded || rebaselined.contains(&death.old.path) {
             // Not in the baseline we just took, and not killed by any commit either. The line
             // keeps the checkpoint it already had, which is what censoring it means, and its
             // fingerprint is parked so that it gets its identity back if it returns.
@@ -484,6 +501,49 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
     Ok(Outcome::Reconciled(report))
 }
 
+/// The commits HEAD's history holds, every parent of every merge included. Most deaths are of
+/// lines last seen at HEAD's own parent, which is answered without walking anything; the walk
+/// happens only once history has been rewritten.
+struct KeptHistory<'a> {
+    repository: &'a Repository,
+    head: &'a CommitInfo,
+    ancestors: Option<HashSet<String>>,
+}
+
+impl<'a> KeptHistory<'a> {
+    fn new(repository: &'a Repository, head: &'a CommitInfo) -> KeptHistory<'a> {
+        KeptHistory {
+            repository,
+            head,
+            ancestors: None,
+        }
+    }
+
+    fn contains(&mut self, sha: &str) -> bool {
+        if sha == self.head.sha || self.head.parents.iter().any(|id| id.to_string() == sha) {
+            return true;
+        }
+        let repository = self.repository;
+        let head = self.head;
+        self.ancestors
+            .get_or_insert_with(|| {
+                let mut seen: HashSet<String> = HashSet::new();
+                let mut queue: Vec<_> = head.parents.clone();
+                while let Some(id) = queue.pop() {
+                    if !seen.insert(id.to_string()) {
+                        continue;
+                    }
+                    // A shallow clone stops where git's copy of the history does.
+                    if let Ok(commit) = repository.commit(id) {
+                        queue.extend(commit.parents);
+                    }
+                }
+                seen
+            })
+            .contains(sha)
+    }
+}
+
 enum FateKind {
     Changed {
         state: State,
@@ -586,6 +646,7 @@ impl Report {
             anchored: 0,
             revised: 0,
             restored: 0,
+            set_aside: 0,
             unparsed: Vec::new(),
             rebaselined: Vec::new(),
         }

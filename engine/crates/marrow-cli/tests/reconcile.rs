@@ -698,6 +698,42 @@ fn a_line_a_branch_switch_hid_keeps_its_identity_when_it_returns() {
 }
 
 #[test]
+fn a_commit_moved_off_the_branch_by_a_reset_kills_nothing() {
+    let directory = repo("reset");
+    write(&directory, "inventory.py", HELPER);
+    hand_commit(&directory, "a person's helper");
+    reconciled(&directory);
+    write(&directory, "inventory.py", &format!("{HELPER}{CALLER}"));
+    hand_commit(&directory, "a caller that belongs on its own branch");
+    reconciled(&directory);
+    // The usual way to move a commit to a branch: name it, then take the current branch back.
+    git(&directory, &["branch", "caller"]);
+    git(&directory, &["reset", "-q", "--hard", "HEAD~1"]);
+    write(
+        &directory,
+        "inventory.py",
+        &format!("{HELPER}\ndef other(x):\n    return x + 1\n"),
+    );
+    hand_commit(&directory, "carry on without it");
+    let output = marrow(&["reconcile"], &directory);
+    assert!(output.status.success());
+    let said = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        said.contains("2 last seen on commits history no longer holds"),
+        "{said}"
+    );
+    let deaths = stored(&directory)
+        .fates
+        .iter()
+        .filter(|(state, ..)| state == "dead")
+        .count();
+    assert_eq!(
+        deaths, 0,
+        "the caller lives on its branch; nothing killed it"
+    );
+}
+
+#[test]
 fn a_repository_with_no_commits_is_skipped() {
     let directory = repo("unborn");
     let output = marrow(&["reconcile"], &directory);

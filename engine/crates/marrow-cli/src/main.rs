@@ -509,10 +509,20 @@ fn reconcile_command(repo: Option<&Path>, install: bool) -> ExitCode {
                      changing it, so no fates were recorded for it)"
                 );
             }
-            let restored = if report.restored > 0 {
-                format!(" ({} back from another branch)", report.restored)
-            } else {
+            let mut notes = Vec::new();
+            if report.restored > 0 {
+                notes.push(format!("{} back from another branch", report.restored));
+            }
+            if report.set_aside > 0 {
+                notes.push(format!(
+                    "{} last seen on commits history no longer holds, set aside",
+                    report.set_aside
+                ));
+            }
+            let restored = if notes.is_empty() {
                 String::new()
+            } else {
+                format!(" ({})", notes.join("; "))
             };
             println!(
                 "marrow reconcile: {} — {} born, {} edited, {} moved, {} dead, {} alive{restored}",

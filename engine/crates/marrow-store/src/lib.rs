@@ -531,6 +531,14 @@ impl Recording<'_> {
             .query_row(params![line_id], |row| row.get(0))?)
     }
 
+    /// The commit a line was last confirmed alive at, if any commit has seen it.
+    pub fn last_seen_commit(&self, line_id: i64) -> Result<Option<String>, Error> {
+        Ok(self
+            .transaction
+            .prepare_cached("SELECT last_seen_commit FROM lines WHERE line_id = ?1")?
+            .query_row(params![line_id], |row| row.get(0))?)
+    }
+
     /// The token-pair hashes of the version a line was born as.
     pub fn birth_bigrams(&self, line_id: i64) -> Result<Vec<u64>, Error> {
         let bytes: Vec<u8> = self
