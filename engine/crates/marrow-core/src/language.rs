@@ -6,6 +6,8 @@ pub enum Language {
     Python,
     TypeScript,
     Tsx,
+    /// Plain JavaScript and JSX: one grammar parses both.
+    JavaScript,
 }
 
 impl Language {
@@ -17,6 +19,7 @@ impl Language {
             "py" => Some(Language::Python),
             "ts" | "mts" | "cts" => Some(Language::TypeScript),
             "tsx" => Some(Language::Tsx),
+            "js" | "jsx" | "mjs" | "cjs" => Some(Language::JavaScript),
             _ => None,
         }
     }
@@ -27,6 +30,7 @@ impl Language {
             Language::Python => tree_sitter_python::LANGUAGE.into(),
             Language::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
             Language::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
+            Language::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
         }
     }
 
@@ -48,7 +52,7 @@ impl Language {
                 "string_literal" | "raw_string_literal" | "string_content"
             ),
             Language::Python => matches!(node.kind(), "string" | "string_content"),
-            Language::TypeScript | Language::Tsx => {
+            Language::TypeScript | Language::Tsx | Language::JavaScript => {
                 matches!(
                     node.kind(),
                     "string" | "template_string" | "string_fragment"
@@ -61,7 +65,7 @@ impl Language {
         match self {
             Language::Rust => &["//!", "///", "//", "/*!", "/**", "/*"],
             Language::Python => &["#"],
-            Language::TypeScript | Language::Tsx => &["//", "/**", "/*"],
+            Language::TypeScript | Language::Tsx | Language::JavaScript => &["//", "/**", "/*"],
         }
     }
 
@@ -71,7 +75,7 @@ impl Language {
             // A bare tuple, `x = a,` or `return a,` or `x, = pair`, has no brackets, so the
             // grammar calls it an expression or pattern list.
             Language::Python => &["tuple", "tuple_pattern", "expression_list", "pattern_list"],
-            Language::TypeScript | Language::Tsx => &[],
+            Language::TypeScript | Language::Tsx | Language::JavaScript => &[],
         };
         if !tuple_kinds.contains(&node.kind()) {
             return false;
@@ -97,6 +101,9 @@ mod tests {
         assert_eq!(Language::from_path("view.tsx"), Some(Language::Tsx));
         assert_eq!(Language::from_path("README.md"), None);
         assert_eq!(Language::from_path("dir.rs/Makefile"), None);
-        assert_eq!(Language::from_path("script.js"), None);
+        assert_eq!(Language::from_path("script.js"), Some(Language::JavaScript));
+        assert_eq!(Language::from_path("view.jsx"), Some(Language::JavaScript));
+        assert_eq!(Language::from_path("tool.cjs"), Some(Language::JavaScript));
+        assert_eq!(Language::from_path("data.json"), None);
     }
 }
