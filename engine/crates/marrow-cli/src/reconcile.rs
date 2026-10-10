@@ -722,10 +722,10 @@ pub fn install(repo: Option<&Path>) -> Result<String, String> {
 
 /// The git hooks that reconcile. A merge or a pull makes a commit without running post-commit,
 /// so post-merge covers those.
-const HOOKS: [&str; 2] = ["post-commit", "post-merge"];
+pub const HOOKS: [&str; 2] = ["post-commit", "post-merge"];
 
 /// The line that marks a git hook as one marrow wrote.
-const INSTALLED: &str =
+pub const INSTALLED: &str =
     "# Installed by marrow. Records a commit-anchored checkpoint of every tracked line.";
 
 /// Canonical paths on Windows carry a `\\?\` prefix, which is noise in a message.

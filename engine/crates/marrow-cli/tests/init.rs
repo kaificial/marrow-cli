@@ -248,3 +248,60 @@ fn a_hook_whose_binary_has_moved_is_reported_and_replaced() {
     let doctor = String::from_utf8_lossy(&marrow(&directory, &["doctor"]).stdout).into_owned();
     assert!(doctor.contains("ok    write hook"), "{doctor}");
 }
+
+#[test]
+fn uninstall_takes_out_what_init_put_in_and_nothing_else() {
+    let directory = repo("uninstall");
+    assert!(marrow(&directory, &["init", "--no-backfill"])
+        .status
+        .success());
+    // A hook of the person's own, in the same file.
+    let path = directory.join(".claude").join("settings.local.json");
+    let mut settings = settings(&directory);
+    settings["hooks"]["Stop"] = serde_json::json!([
+        {"hooks": [{"type": "command", "command": "echo done"}]}
+    ]);
+    std::fs::write(&path, settings.to_string()).unwrap();
+
+    let output = marrow(&directory, &["uninstall"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let left = self::settings(&directory);
+    assert!(!left.to_string().contains("record --hook"), "{left}");
+    assert_eq!(left["hooks"]["Stop"][0]["hooks"][0]["command"], "echo done");
+    let hooks = directory.join(".git").join("hooks");
+    assert!(!hooks.join("post-commit").exists());
+    assert!(!hooks.join("post-merge").exists());
+    assert!(
+        directory.join(".marrow").join("db.sqlite").exists(),
+        "the data stays unless asked"
+    );
+
+    assert!(marrow(&directory, &["uninstall", "--purge"])
+        .status
+        .success());
+    assert!(!directory.join(".marrow").exists());
+}
+
+#[test]
+fn uninstall_leaves_a_persons_own_git_hook_alone() {
+    let directory = repo("uninstall-mine");
+    let hooks = directory.join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    let mine = "#!/bin/sh\nmake lint\nmarrow reconcile\n";
+    std::fs::write(hooks.join("post-commit"), mine).unwrap();
+    let output = marrow(&directory, &["uninstall"]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "something is left to do by hand"
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Remove that line by hand"));
+    assert_eq!(
+        std::fs::read_to_string(hooks.join("post-commit")).unwrap(),
+        mine
+    );
+}

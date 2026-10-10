@@ -16,6 +16,7 @@ mod report;
 mod serve;
 mod status;
 mod survival;
+mod uninstall;
 
 use clap::{Parser, Subcommand};
 use marrow_core::Trace;
@@ -103,6 +104,13 @@ enum Command {
     /// Check that marrow is watching this repository: its hooks, how much history it holds, and
     /// the mutation-corpus result for this build.
     Doctor,
+    /// Stop watching the repository in the current directory: take out the hooks init added.
+    /// What marrow recorded stays in .marrow/ unless --purge is given.
+    Uninstall {
+        /// Also delete .marrow/ and everything in it.
+        #[arg(long)]
+        purge: bool,
+    },
     /// Print everything marrow stores about this repository, so anyone can check it holds no
     /// source code.
     Export {
@@ -200,6 +208,20 @@ fn main() -> ExitCode {
             }
             Err(message) => {
                 eprintln!("marrow doctor: {message}");
+                ExitCode::FAILURE
+            }
+        },
+        Some(Command::Uninstall { purge }) => match uninstall::uninstall(purge) {
+            Ok(removal) => {
+                print!("{}", removal.text);
+                if removal.complete {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                }
+            }
+            Err(message) => {
+                eprintln!("marrow uninstall: {message}");
                 ExitCode::FAILURE
             }
         },
