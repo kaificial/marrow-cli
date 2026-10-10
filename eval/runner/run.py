@@ -1,6 +1,8 @@
 import argparse
+import json
 import os
 import sys
+import time
 
 sys.dont_write_bytecode = True
 
@@ -120,6 +122,39 @@ def render_tables(results, out):
             print(f"  {layer:<40}{count:>6}", file=out)
 
 
+def record_grade(engine, results, harness_errors, fixture_count, out):
+    """Leave the result beside the binary, so `marrow doctor` can report the pass rate of the
+    exact build it is. The binary's size and modification time identify the build: a rebuild
+    changes them, and doctor then reports the build as not graded rather than borrowing an old
+    result. Only a full run of the real engine is recorded; a filtered run or a test engine
+    says nothing about the corpus as a whole."""
+    program = engine[0]
+    if len(engine) != 1 or not os.path.isfile(program):
+        return
+    if {result.engine["name"] for result in results} != {"marrow"}:
+        return
+    decisions = [decision for result in results for decision in result.decisions]
+    status = os.stat(program)
+    record = {
+        "engine_version": results[0].engine["version"],
+        "binary_size": status.st_size,
+        "binary_mtime_ns": status.st_mtime_ns,
+        "graded_at": int(time.time()),
+        "fixtures": fixture_count,
+        "fixtures_passed": sum(1 for result in results if result.passed),
+        "fixtures_unscored": len(harness_errors),
+        "fate_decisions": len(decisions),
+        "fate_decisions_correct": sum(1 for decision in decisions if decision.outcome == "correct"),
+    }
+    path = program + ".eval.json"
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(record, handle, indent=2)
+            handle.write("\n")
+    except OSError as error:
+        print(f"WARNING: couldn't write {path} for marrow doctor: {error}", file=out)
+
+
 def main(argv=None, out=None):
     out = out or sys.stdout
     parser = argparse.ArgumentParser(
@@ -180,6 +215,8 @@ def main(argv=None, out=None):
         render_tables(results, out)
 
     failed = [result.name for result in results if not result.passed]
+    if results and not args.only:
+        record_grade(engine, results, harness_errors, len(selected), out)
     print("\n== Result ==", file=out)
     if engine_names - {"marrow"}:
         names = ", ".join(sorted(engine_names))

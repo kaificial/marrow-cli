@@ -2,8 +2,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod audit;
 mod backfill;
 mod capture;
+mod doctor;
 mod explain;
 mod paths;
 mod reconcile;
@@ -78,6 +80,16 @@ enum Command {
         #[arg(long)]
         session: Option<String>,
     },
+    /// Check that marrow is watching this repository: its hooks, how much history it holds, and
+    /// the mutation-corpus result for this build.
+    Doctor,
+    /// Print everything marrow stores about this repository, so anyone can check it holds no
+    /// source code.
+    Export {
+        /// Dump every file in .marrow/ and every row of every table. Currently the only export.
+        #[arg(long)]
+        audit: bool,
+    },
     /// Reconcile what marrow knows against HEAD, and checkpoint every line at that commit.
     Reconcile {
         /// Path to the local git repository. Defaults to the current directory.
@@ -145,6 +157,27 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some(Command::Doctor) => match doctor::doctor() {
+            Ok(checkup) => {
+                print!("{}", checkup.text);
+                if checkup.healthy {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                }
+            }
+            Err(message) => {
+                eprintln!("marrow doctor: {message}");
+                ExitCode::FAILURE
+            }
+        },
+        Some(Command::Export { audit }) => {
+            if !audit {
+                eprintln!("marrow export: only --audit is supported");
+                return ExitCode::from(2);
+            }
+            print_or_fail("export", audit::export_audit())
+        }
         Some(Command::Reconcile { repo, install }) => reconcile_command(repo.as_deref(), install),
     }
 }

@@ -1,4 +1,4 @@
-//! `marrow explain`, `report` and `status` end to end, on real histories whose every step the
+//! `marrow explain`, `report`, `status`, `doctor` and `export --audit` end to end, on real histories whose every step the
 //! tests know.
 
 use std::path::{Path, PathBuf};
@@ -528,4 +528,149 @@ fn explain_says_nothing_about_disk_when_the_line_is_just_where_it_was() {
     );
     let explained = succeeds(&directory, &["explain", "inventory.py:2"]);
     assert!(!explained.contains("on disk since then"), "{explained}");
+}
+
+/// Doctor reads the user's own Claude Code settings too, so each run gets a home of its own.
+fn doctor(directory: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_marrow"))
+        .arg("doctor")
+        .current_dir(directory)
+        .env("HOME", directory)
+        .env("USERPROFILE", directory)
+        .output()
+        .expect("runs marrow")
+}
+
+#[test]
+fn doctor_reports_missing_hooks_and_history_as_problems() {
+    let directory = repo("doctor-bare");
+    write(&directory, "inventory.py", HELPER);
+    commit(&directory, "a person's helper");
+    let output = doctor(&directory);
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("warn  write hook"), "{text}");
+    assert!(text.contains("warn  commit hook"), "{text}");
+    assert!(text.contains("no .marrow/db.sqlite yet"), "{text}");
+}
+
+#[test]
+fn doctor_sees_both_hooks_and_a_finished_backfill() {
+    let directory = repo("doctor-watching");
+    write(&directory, "inventory.py", HELPER);
+    let head = commit(&directory, "a person's helper");
+    succeeds(&directory, &["backfill"]);
+    succeeds(&directory, &["reconcile", "--install"]);
+    std::fs::create_dir_all(directory.join(".claude")).unwrap();
+    write(
+        &directory,
+        ".claude/settings.json",
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Edit|Write",
+            "hooks": [{"type": "command", "command": "marrow record --hook"}]}]}}"#,
+    );
+    let text = String::from_utf8_lossy(&doctor(&directory).stdout).into_owned();
+    assert!(text.contains("ok    write hook"), "{text}");
+    assert!(
+        text.contains("registered in .claude/settings.json"),
+        "{text}"
+    );
+    assert!(text.contains("ok    commit hook"), "{text}");
+    assert!(text.contains("ok    history"), "{text}");
+    assert!(
+        text.contains(&format!("backfill complete through {}", short(&head))),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("HEAD ({}) is recorded", short(&head))),
+        "{text}"
+    );
+    // Whether this test binary was graded depends on whether `just eval` ran since it was built,
+    // so only the check's presence is certain.
+    assert!(text.contains("mutation corpus"), "{text}");
+}
+
+#[test]
+fn doctor_notices_a_commit_that_was_never_reconciled() {
+    let directory = repo("doctor-behind");
+    write(&directory, "inventory.py", HELPER);
+    commit(&directory, "a person's helper");
+    succeeds(&directory, &["backfill"]);
+    write(&directory, "report.py", REPORT);
+    let head = commit(&directory, "made without the hook");
+    let text = String::from_utf8_lossy(&doctor(&directory).stdout).into_owned();
+    assert!(
+        text.contains(&format!("HEAD ({}) isn't recorded", short(&head))),
+        "{text}"
+    );
+}
+
+#[test]
+fn the_audit_dump_holds_every_table_and_no_source_text() {
+    let directory = repo("audit");
+    let secret = "def quokka_ledger_total(zanzibar_rows):
+    marmalade_sum = sum(zanzibar_rows)
+                      print(\"platypus-string-literal\")
+    return marmalade_sum
+";
+    write(&directory, "hidden_module_name.py", secret);
+    commit(&directory, "a person's code");
+    succeeds(&directory, &["backfill"]);
+    agent_writes(
+        &directory,
+        "agent_module_name.py",
+        &secret.replace("quokka", "wombat"),
+    );
+    commit(&directory, "the agent's code");
+    succeeds(&directory, &["reconcile"]);
+
+    let dump = succeeds(&directory, &["export", "--audit"]);
+    let parsed: serde_json::Value = serde_json::from_str(&dump).expect("the dump is JSON");
+    let tables: Vec<&str> = parsed["tables"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|table| table["name"].as_str().unwrap())
+        .collect();
+    for table in [
+        "commits",
+        "fates",
+        "lines",
+        "meta",
+        "sessions",
+        "snapshot_lines",
+        "snapshots",
+    ] {
+        assert!(tables.contains(&table), "{table} missing from {tables:?}");
+    }
+    let lines = parsed["tables"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|table| table["name"] == "lines")
+        .unwrap();
+    assert!(lines["row_count"].as_u64().unwrap() >= 8, "{lines}");
+    assert!(parsed["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|file| file["name"] == "db.sqlite"));
+    for word in [
+        "quokka",
+        "wombat",
+        "zanzibar",
+        "marmalade",
+        "platypus",
+        "ledger",
+        "hidden_module_name",
+        "agent_module_name",
+    ] {
+        assert!(!dump.contains(word), "the dump contains {word:?}");
+    }
+}
+
+#[test]
+fn export_without_audit_is_a_usage_error() {
+    let directory = repo("export-usage");
+    let output = marrow(&directory, &["export"]);
+    assert_eq!(output.status.code(), Some(2));
 }
