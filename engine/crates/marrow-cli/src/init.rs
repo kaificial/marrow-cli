@@ -1,6 +1,6 @@
 //! `marrow init` (PRD §7.1): start watching the repository in the current directory. It creates
-//! the store, registers the Claude Code write hook, and installs the post-commit hook. Running it
-//! again is harmless: each step that is already done is left as it is.
+//! the store, registers the Claude Code write hook, and installs the post-commit and post-merge
+//! hooks. Running it again is harmless: each step that is already done is left as it is.
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};

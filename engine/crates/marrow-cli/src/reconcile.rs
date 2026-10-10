@@ -629,27 +629,46 @@ pub fn install(repo: Option<&Path>) -> Result<String, String> {
     let hooks = root.join(".git").join("hooks");
     std::fs::create_dir_all(&hooks)
         .map_err(|error| format!("can't create {}: {error}", hooks.display()))?;
-    let hook = hooks.join("post-commit");
-    if let Ok(current) = std::fs::read_to_string(&hook) {
-        if current.contains("marrow") {
-            return Ok(format!("{} already runs marrow", display(&hook)));
+    let mut done = Vec::new();
+    let mut refused = Vec::new();
+    for name in HOOKS {
+        let hook = hooks.join(name);
+        if let Ok(current) = std::fs::read_to_string(&hook) {
+            if current.contains("marrow") {
+                done.push(format!("{} already runs marrow", display(&hook)));
+            } else {
+                refused.push(format!(
+                    "{} already exists. Add this line to it:\n{command}",
+                    display(&hook)
+                ));
+            }
+            continue;
         }
-        return Err(format!(
-            "{} already exists. Add this line to it:\n{command}",
-            display(&hook)
-        ));
+        let script = format!(
+            "#!/bin/sh\n\
+             # Installed by marrow. Records a commit-anchored checkpoint of every tracked line.\n\
+             # Its exit code is ignored by git, so a marrow problem can never fail a commit.\n\
+             {command} || true\n"
+        );
+        std::fs::write(&hook, script)
+            .map_err(|error| format!("can't write {}: {error}", display(&hook)))?;
+        make_executable(&hook);
+        done.push(format!("installed {}", display(&hook)));
     }
-    let script = format!(
-        "#!/bin/sh\n\
-         # Installed by marrow. Records a commit-anchored checkpoint of every tracked line.\n\
-         # Its exit code is ignored by git, so a marrow problem can never fail a commit.\n\
-         {command} || true\n"
-    );
-    std::fs::write(&hook, script)
-        .map_err(|error| format!("can't write {}: {error}", display(&hook)))?;
-    make_executable(&hook);
-    Ok(format!("installed {}", display(&hook)))
+    if refused.is_empty() {
+        Ok(done.join("; "))
+    } else {
+        Err(done
+            .into_iter()
+            .chain(refused)
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
 }
+
+/// The git hooks that reconcile. A merge or a pull makes a commit without running post-commit,
+/// so post-merge covers those.
+const HOOKS: [&str; 2] = ["post-commit", "post-merge"];
 
 /// Canonical paths on Windows carry a `\\?\` prefix, which is noise in a message.
 fn display(path: &Path) -> String {

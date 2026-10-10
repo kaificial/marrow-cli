@@ -33,7 +33,7 @@ enum Command {
     /// Print the engine version.
     Version,
     /// Start watching the repository in the current directory: create .marrow/, register the
-    /// Claude Code write hook and the post-commit hook, and offer to record the history so far.
+    /// Claude Code write hook and the git hooks, and offer to record the history so far.
     Init {
         /// Record the existing history now, without asking.
         #[arg(long, conflicts_with = "no_backfill")]
@@ -114,7 +114,8 @@ enum Command {
         /// Path to the local git repository. Defaults to the current directory.
         #[arg(long)]
         repo: Option<PathBuf>,
-        /// Write .git/hooks/post-commit so every commit is reconciled, and do nothing else.
+        /// Write the post-commit and post-merge hooks so every commit is reconciled, and do nothing
+        /// else.
         #[arg(long)]
         install: bool,
     },

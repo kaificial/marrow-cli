@@ -595,6 +595,11 @@ fn install_writes_the_hook_and_leaves_an_existing_one_alone() {
     let script = std::fs::read_to_string(&hook).expect("the hook is written");
     assert!(script.contains("reconcile --repo"), "{script}");
     assert!(script.starts_with("#!/bin/sh"), "{script}");
+    let merge_hook = directory.join(".git").join("hooks").join("post-merge");
+    assert_eq!(
+        std::fs::read_to_string(&merge_hook).expect("post-merge is written too"),
+        script
+    );
 
     let again = marrow(&["reconcile", "--install"], &directory);
     assert!(String::from_utf8_lossy(&again.stdout).contains("already runs marrow"));
@@ -625,6 +630,34 @@ fn the_installed_hook_runs_on_a_real_commit() {
         .lines
         .iter()
         .all(|line| line.origin == "human" && line.birth_commit.as_deref() == Some(sha.as_str())));
+}
+
+#[test]
+fn a_merge_is_reconciled_by_the_post_merge_hook() {
+    let directory = repo("merged");
+    assert!(marrow(&["reconcile", "--install"], &directory)
+        .status
+        .success());
+    write(&directory, "inventory.py", HELPER);
+    hand_commit(&directory, "a person's helper");
+    let start = git(&directory, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    git(&directory, &["checkout", "-q", "-b", "side"]);
+    write(&directory, "caller.py", CALLER);
+    hand_commit(&directory, "work on a branch");
+    git(&directory, &["checkout", "-q", &start]);
+    write(&directory, "other.py", "def other(x):\n    return x + 1\n");
+    hand_commit(&directory, "work on main");
+    git(
+        &directory,
+        &["merge", "-q", "--no-ff", "-m", "merge the branch", "side"],
+    );
+    let merge = git(&directory, &["rev-parse", "HEAD"]);
+    let stored = stored(&directory);
+    assert!(
+        stored.commits.contains(&(merge, 1)),
+        "git runs post-merge, not post-commit, for a merge: {:?}",
+        stored.commits
+    );
 }
 
 #[test]

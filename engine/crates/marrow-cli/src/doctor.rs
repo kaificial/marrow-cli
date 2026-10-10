@@ -1,5 +1,5 @@
 //! `marrow doctor`: is marrow actually watching this repository, and can this build of it be
-//! trusted (PRD §7.1)? Four checks: the Claude Code write hook, the post-commit hook, how much of
+//! trusted (PRD §7.1)? Four checks: the Claude Code write hook, the git hooks, how much of
 //! the history the store holds, and the mutation-corpus result for this exact build.
 
 use std::fmt::Write;
@@ -228,18 +228,36 @@ fn covers(matcher: &str, tool: &str) -> bool {
 }
 
 fn commit_hook(root: &Path) -> (Verdict, String) {
-    let hook = root.join(".git").join("hooks").join("post-commit");
-    match std::fs::read_to_string(&hook) {
-        Ok(script) if script.contains("marrow") && script.contains("reconcile") => {
-            (Verdict::Ok, "post-commit runs marrow reconcile".to_owned())
-        }
-        Ok(_) => (
+    let hooks = root.join(".git").join("hooks");
+    let runs = |name: &str| match std::fs::read_to_string(hooks.join(name)) {
+        Ok(script) if script.contains("marrow") && script.contains("reconcile") => Some(true),
+        Ok(_) => Some(false),
+        Err(_) => None,
+    };
+    match (runs("post-commit"), runs("post-merge")) {
+        (Some(true), Some(true)) => (
+            Verdict::Ok,
+            "post-commit and post-merge run marrow reconcile".to_owned(),
+        ),
+        (Some(true), Some(false)) => (
+            Verdict::Warn,
+            "a post-merge hook exists but doesn't run marrow reconcile, so merges and pulls\n\
+             aren't checkpointed until the next commit. Add a line running marrow reconcile to it"
+                .to_owned(),
+        ),
+        (Some(true), None) => (
+            Verdict::Warn,
+            "no post-merge hook, so merges and pulls aren't checkpointed until the next commit.\n\
+             Run: marrow init"
+                .to_owned(),
+        ),
+        (Some(false), _) => (
             Verdict::Warn,
             "a post-commit hook exists but doesn't run marrow reconcile, so commits aren't\n\
              checkpointed. Add a line running marrow reconcile to it"
                 .to_owned(),
         ),
-        Err(_) => (
+        (None, _) => (
             Verdict::Warn,
             "no post-commit hook, so commits aren't checkpointed. Run: marrow init".to_owned(),
         ),
