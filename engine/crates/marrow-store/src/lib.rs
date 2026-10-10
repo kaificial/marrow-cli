@@ -14,7 +14,19 @@ pub use read::{CommitRecord, FateRecord, LineRecord, SessionRecord};
 /// For reading rows through [`Store::connection`] without naming rusqlite.
 pub use rusqlite::{Result as SqlResult, Row};
 
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
+
+/// Lines a checkout took out of a file without any commit removing them. They are alive but out
+/// of sight, so their fingerprints are kept here, and a line that comes back identical gets its
+/// own identity back instead of a new one whose birth is unknown (version 5).
+const PARKED_LINES: &str = "CREATE TABLE IF NOT EXISTS parked_lines (
+                 line_id INTEGER PRIMARY KEY REFERENCES lines(line_id),
+                 file_path_hash TEXT NOT NULL,
+                 line_number INTEGER NOT NULL,
+                 fingerprint INTEGER NOT NULL,
+                 parked_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS parked_lines_by_file ON parked_lines(file_path_hash);";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -201,6 +213,9 @@ impl Store {
         let mut store = Store { connection };
         match store.stored_version()? {
             Some(SCHEMA_VERSION) => {}
+            // Version 5 only added a table, so a version 4 store is upgraded in place rather than
+            // refused: rebuilding it would lose live capture, which a backfill can't recover.
+            Some(4) => store.upgrade_from_4()?,
             Some(found) => {
                 return Err(Error::Schema {
                     found,
@@ -330,7 +345,20 @@ impl Store {
                  PRIMARY KEY (file_path_hash, line_number)
              );
              CREATE INDEX IF NOT EXISTS snapshot_lines_by_line ON snapshot_lines(line_id);
+             {PARKED_LINES}
              INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '{SCHEMA_VERSION}');
+             COMMIT;"
+        ))?;
+        Ok(())
+    }
+
+    fn upgrade_from_4(&mut self) -> Result<(), Error> {
+        // Two processes can open an old store at once; the lock queues them and every statement
+        // is safe to run twice.
+        self.connection.execute_batch(&format!(
+            "BEGIN IMMEDIATE;
+             {PARKED_LINES}
+             UPDATE meta SET value = '{SCHEMA_VERSION}' WHERE key = 'schema_version';
              COMMIT;"
         ))?;
         Ok(())
@@ -661,6 +689,54 @@ impl Recording<'_> {
         self.transaction.execute(
             "UPDATE snapshots SET observed_at = MAX(observed_at, ?2) WHERE file_path_hash = ?1",
             params![file_path_hash, observed_at],
+        )?;
+        Ok(())
+    }
+
+    /// Keeps the fingerprint of a line a checkout took out of sight, so it can be recognized if
+    /// it comes back.
+    pub fn park_line(
+        &self,
+        line_id: i64,
+        file_path_hash: &str,
+        line_number: u32,
+        fingerprint: u64,
+        parked_at: i64,
+    ) -> Result<(), Error> {
+        self.transaction.execute(
+            "INSERT OR REPLACE INTO parked_lines
+                 (line_id, file_path_hash, line_number, fingerprint, parked_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                line_id,
+                file_path_hash,
+                line_number,
+                fingerprint as i64,
+                parked_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// The parked lines of one file, in the order they stood in it: line id and fingerprint.
+    pub fn parked_lines(&self, file_path_hash: &str) -> Result<Vec<(i64, u64)>, Error> {
+        let mut statement = self.transaction.prepare_cached(
+            "SELECT line_id, fingerprint FROM parked_lines WHERE file_path_hash = ?1
+             ORDER BY line_number, line_id",
+        )?;
+        let rows = statement
+            .query_map(params![file_path_hash], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)? as u64))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Lines back in a file's last known state are no longer out of sight.
+    pub fn unpark_present(&self) -> Result<(), Error> {
+        self.transaction.execute(
+            "DELETE FROM parked_lines WHERE line_id IN (SELECT line_id FROM snapshot_lines)",
+            [],
         )?;
         Ok(())
     }
@@ -1020,6 +1096,81 @@ mod tests {
             Store::open(&path),
             Err(super::Error::Schema { found: 0, .. })
         ));
+    }
+
+    #[test]
+    fn a_version_4_store_is_upgraded_in_place_and_keeps_its_rows() {
+        let path =
+            std::env::temp_dir().join(format!("marrow-store-v4-{}.sqlite", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        {
+            let mut store = Store::open(&path).unwrap();
+            let recording = store.begin().unwrap();
+            recording
+                .ensure_session("session-1", "claude_code", None, 5)
+                .unwrap();
+            recording.commit().unwrap();
+            // What a version 4 store looks like: everything but the parked lines.
+            store
+                .connection()
+                .execute_batch(
+                    "DROP TABLE parked_lines;
+                     UPDATE meta SET value = '4' WHERE key = 'schema_version';",
+                )
+                .unwrap();
+        }
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+        let sessions: i64 = store
+            .connection()
+            .query_row("SELECT count(*) FROM sessions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(sessions, 1, "live capture survives the upgrade");
+        let parked: i64 = store
+            .connection()
+            .query_row("SELECT count(*) FROM parked_lines", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(parked, 0);
+    }
+
+    #[test]
+    fn a_parked_line_is_found_by_file_and_cleared_once_it_is_back() {
+        let mut store = store();
+        let recording = store.begin().unwrap();
+        let id = recording
+            .insert_line(&BornLine {
+                file_path_hash: "f1",
+                birth_commit: None,
+                birth_ts: 1,
+                birth_line_number: 3,
+                birth_observed: true,
+                birth_bigrams: &[4, 5, 6, 7],
+                origin: Origin::Human,
+                session_id: None,
+                model: None,
+                syntactic_role: "expression_statement",
+                token_count: 3,
+            })
+            .unwrap();
+        recording.park_line(id, "f1", 3, 0xfeed, 10).unwrap();
+        assert_eq!(recording.parked_lines("f1").unwrap(), vec![(id, 0xfeed)]);
+        assert!(recording.parked_lines("f2").unwrap().is_empty());
+        recording.unpark_present().unwrap();
+        assert_eq!(
+            recording.parked_lines("f1").unwrap().len(),
+            1,
+            "not in any snapshot yet, so still parked"
+        );
+        let back = Snapshot {
+            language: "python".to_owned(),
+            normalizer_version: 2,
+            observed_at: 20,
+            content_id: None,
+            lines: vec![line(id, 3, 0xfeed)],
+        };
+        recording.replace_snapshot("f1", &back).unwrap();
+        recording.unpark_present().unwrap();
+        assert!(recording.parked_lines("f1").unwrap().is_empty());
     }
 
     #[test]

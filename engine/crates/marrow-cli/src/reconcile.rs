@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use marrow_core::align::bigram_dice;
+use marrow_core::constants::WEAK_ANCHOR_MAX_CONTENT_TOKENS;
 use marrow_core::history::{CommitInfo, Repository};
 use marrow_core::language::Language;
 use marrow_core::normalize::{normalize, Line, NORMALIZER_VERSION};
@@ -49,6 +50,8 @@ pub struct Report {
     pub anchored: usize,
     /// Agent-written lines a person has since changed.
     pub revised: usize,
+    /// Lines a checkout had taken out of sight that came back unchanged, with their identity.
+    pub restored: usize,
     /// Files in HEAD that tree-sitter gave up on, whose lines were left untouched.
     pub unparsed: Vec<String>,
     /// Files whose contents changed without this commit changing them, so the committed version
@@ -282,7 +285,23 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
         let line_id = line_id(&old_files, &death.old)?;
         if rebaselined.contains(&death.old.path) {
             // Not in the baseline we just took, and not killed by any commit either. The line
-            // keeps the checkpoint it already had, which is what censoring it means.
+            // keeps the checkpoint it already had, which is what censoring it means, and its
+            // fingerprint is parked so that it gets its identity back if it returns.
+            if let Some(line) = old_side[&death.old.path]
+                .lines
+                .iter()
+                .find(|line| line.number == death.old.line)
+            {
+                recording
+                    .park_line(
+                        line_id,
+                        &path_hash(&death.old.path),
+                        line.number,
+                        line.fingerprint,
+                        observed_at,
+                    )
+                    .map_err(|error| format!("{error}"))?;
+            }
             continue;
         }
         fates.push((
@@ -298,18 +317,39 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
 
     // Anything in the commit that no stored line accounts for was written without the hook
     // seeing it, which means a person wrote it.
+    let mut taken: HashSet<i64> = identity.values().copied().collect();
     for (path, file) in &new_side {
         let hash = path_hash(path);
         // A line this commit put there was born in it. One in a file the commit didn't touch
         // was there already, from a branch or a history marrow never walked, at a time nobody
         // recorded.
         let born_here = births_observed && before.commit_touched(path, committed[path]);
+        let mut parked = recording
+            .parked_lines(&hash)
+            .map_err(|error| format!("{error}"))?;
         for line in file.lines.iter() {
             let position = Position {
                 path: path.clone(),
                 line: line.number,
             };
             if identity.contains_key(&position) {
+                continue;
+            }
+            // A line a checkout took out of sight, back exactly as it was: the same line, not a
+            // new one. Lines with too little content to tell apart are never matched this way.
+            let returning = (line.content_tokens > WEAK_ANCHOR_MAX_CONTENT_TOKENS)
+                .then(|| {
+                    parked.iter().position(|(line_id, fingerprint)| {
+                        *fingerprint == line.fingerprint && !taken.contains(line_id)
+                    })
+                })
+                .flatten();
+            if let Some(index) = returning {
+                let (line_id, _) = parked.remove(index);
+                taken.insert(line_id);
+                identity.insert(position, line_id);
+                alive.push(line_id);
+                report.restored += 1;
                 continue;
             }
             let line_id = recording
@@ -431,6 +471,9 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
                 .map_err(|error| format!("{error}"))?;
         }
     }
+    recording
+        .unpark_present()
+        .map_err(|error| format!("{error}"))?;
     // Last, because anchoring takes a line's committed version from the files' last known
     // states: after the commit's are written, and after any file it removed is forgotten, since
     // a line moved out of a renamed file is briefly in both.
@@ -542,6 +585,7 @@ impl Report {
             alive: 0,
             anchored: 0,
             revised: 0,
+            restored: 0,
             unparsed: Vec::new(),
             rebaselined: Vec::new(),
         }

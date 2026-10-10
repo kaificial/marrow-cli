@@ -487,8 +487,13 @@ fn reconcile_command(repo: Option<&Path>, install: bool) -> ExitCode {
                      changing it, so no fates were recorded for it)"
                 );
             }
+            let restored = if report.restored > 0 {
+                format!(" ({} back from another branch)", report.restored)
+            } else {
+                String::new()
+            };
             println!(
-                "marrow reconcile: {} — {} born, {} edited, {} moved, {} dead, {} alive",
+                "marrow reconcile: {} — {} born, {} edited, {} moved, {} dead, {} alive{restored}",
                 reconcile::short(&report.commit),
                 report.born,
                 report.edited,

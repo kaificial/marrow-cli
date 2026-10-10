@@ -661,6 +661,43 @@ fn a_merge_is_reconciled_by_the_post_merge_hook() {
 }
 
 #[test]
+fn a_line_a_branch_switch_hid_keeps_its_identity_when_it_returns() {
+    let directory = repo("returns");
+    write(&directory, "inventory.py", HELPER);
+    hand_commit(&directory, "a person's helper");
+    let start = git(&directory, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    reconciled(&directory);
+    write(&directory, "inventory.py", &format!("{HELPER}{CALLER}"));
+    let added = hand_commit(&directory, "a caller");
+    reconciled(&directory);
+    // An older branch, where the caller doesn't exist yet, and a commit there that doesn't touch
+    // inventory.py: marrow takes the older version as it finds it.
+    git(&directory, &["checkout", "-q", "-b", "older", "HEAD~1"]);
+    write(&directory, "other.py", "def other(x):\n    return x + 1\n");
+    hand_commit(&directory, "work on the older branch");
+    assert!(marrow(&["reconcile"], &directory).status.success());
+    // Back again, and another commit that leaves inventory.py alone.
+    git(&directory, &["checkout", "-q", &start]);
+    write(&directory, "more.py", "def more(y):\n    return y * 3\n");
+    hand_commit(&directory, "more work");
+    let output = marrow(&["reconcile"], &directory);
+    let said = String::from_utf8_lossy(&output.stdout);
+    assert!(said.contains("2 back from another branch"), "{said}");
+
+    let stored = stored(&directory);
+    let callers = stored
+        .lines
+        .iter()
+        .filter(|line| line.birth_commit.as_deref() == Some(added.as_str()))
+        .count();
+    assert_eq!(
+        callers, 2,
+        "the caller's two lines keep the commit they were born in"
+    );
+    assert_eq!(stored.lines.len(), 4 + 2 + 2 + 2, "no line is born twice");
+}
+
+#[test]
 fn a_repository_with_no_commits_is_skipped() {
     let directory = repo("unborn");
     let output = marrow(&["reconcile"], &directory);
