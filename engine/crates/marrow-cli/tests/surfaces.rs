@@ -1,8 +1,10 @@
-//! `marrow explain`, `report`, `status`, `doctor` and `export --audit` end to end, on real histories whose every step the
+//! `marrow explain`, `report`, `status`, `doctor`, `export --audit` and `serve` end to end, on real histories whose every step the
 //! tests know.
 
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Child, Command, Output, Stdio};
 
 use marrow_store::Store;
 
@@ -673,4 +675,115 @@ fn export_without_audit_is_a_usage_error() {
     let directory = repo("export-usage");
     let output = marrow(&directory, &["export"]);
     assert_eq!(output.status.code(), Some(2));
+}
+
+/// A running `marrow serve`, stopped when the test ends however it ends.
+struct Server {
+    child: Child,
+    port: u16,
+}
+
+impl Drop for Server {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn serve(directory: &Path) -> Server {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_marrow"))
+        .args(["serve", "--port", "0"])
+        .current_dir(directory)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("runs marrow serve");
+    let mut first = String::new();
+    BufReader::new(child.stdout.take().expect("piped"))
+        .read_line(&mut first)
+        .expect("serve says where it listens");
+    let port = first
+        .split("http://127.0.0.1:")
+        .nth(1)
+        .and_then(|rest| rest.split('/').next())
+        .and_then(|port| port.parse().ok())
+        .unwrap_or_else(|| panic!("no address in {first:?}"));
+    Server { child, port }
+}
+
+/// One request, as the head and body of the answer.
+fn fetch(server: &Server, method: &str, target: &str, host: &str) -> (String, String) {
+    let mut stream = TcpStream::connect(("127.0.0.1", server.port)).expect("connects");
+    write!(stream, "{method} {target} HTTP/1.1\r\nHost: {host}\r\n\r\n").expect("sends");
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer).expect("reads");
+    let (head, body) = answer.split_once("\r\n\r\n").expect("a whole answer");
+    (head.to_owned(), body.to_owned())
+}
+
+#[test]
+fn serve_answers_the_page_and_the_same_numbers_as_report() {
+    let directory = mixed_history("serve");
+    let server = serve(&directory);
+    let here = format!("127.0.0.1:{}", server.port);
+
+    let (head, page) = fetch(&server, "GET", "/", &here);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(
+        head.contains("Content-Security-Policy: default-src 'none'"),
+        "{head}"
+    );
+    assert!(page.contains("marrow serve's dashboard"));
+
+    let (head, body) = fetch(&server, "GET", "/api/report?resamples=20", &here);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}\n{body}");
+    let report: serde_json::Value = serde_json::from_str(&body).expect("JSON");
+    let names: Vec<&str> = report["groups"]
+        .as_array()
+        .expect("groups")
+        .iter()
+        .map(|group| group["name"].as_str().expect("a name"))
+        .collect();
+    assert_eq!(names, ["agent", "human"]);
+    let deleted = &report["tables"][0];
+    assert_eq!(deleted["death"], "deleted");
+    assert_eq!(deleted["rows"][0]["lines"], 4);
+    assert_eq!(deleted["rows"][1]["lines"], 4);
+    assert!(report["confound"].as_str().is_some(), "{report}");
+    // The terminal says the same about the same data.
+    let text = succeeds(&directory, &["report", "--resamples", "20"]);
+    assert!(
+        text.contains(report["confound"].as_str().unwrap()),
+        "{text}"
+    );
+
+    let (head, body) = fetch(&server, "GET", "/api/explain?target=report.py%3A1", &here);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}\n{body}");
+    let explained: serde_json::Value = serde_json::from_str(&body).expect("JSON");
+    assert_eq!(
+        explained["text"].as_str().unwrap(),
+        succeeds(&directory, &["explain", "report.py:1"])
+    );
+
+    let (head, body) = fetch(&server, "GET", "/api/overview", &here);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(body.contains("session-7"), "{body}");
+
+    // A page elsewhere that points its own name at this machine gets nothing.
+    let (head, _) = fetch(
+        &server,
+        "GET",
+        "/api/report",
+        &format!("rebound.example:{}", server.port),
+    );
+    assert!(head.starts_with("HTTP/1.1 403"), "{head}");
+    let (head, _) = fetch(&server, "POST", "/api/report", &here);
+    assert!(head.starts_with("HTTP/1.1 405"), "{head}");
+}
+
+#[test]
+fn serve_without_records_says_what_to_run() {
+    let directory = repo("serve-empty");
+    let output = marrow(&directory, &["serve", "--port", "0"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("run marrow init or marrow backfill"));
 }

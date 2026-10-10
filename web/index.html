@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marrow Dashboard</title>
+<!--
+  marrow serve's dashboard. It is built into the binary and served from 127.0.0.1 only. Every
+  number on it comes from the same code as `marrow report`, `status`, `explain` and `doctor`; the
+  page only lays them out. It loads nothing from anywhere else, and the server's
+  Content-Security-Policy forbids it to (docs/decisions/0013-serve.md).
+-->
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11, 11, 11, 0.10);
+  --wash: rgba(11, 11, 11, 0.04);
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warning: #fab219;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10);
+    --wash: rgba(255, 255, 255, 0.05); --good-text: #0ca30c;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10);
+  --wash: rgba(255, 255, 255, 0.05); --good-text: #0ca30c;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 0 0 4px; }
+.sub { color: var(--ink-2); }
+.muted { color: var(--muted); }
+.health { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+nav { display: flex; gap: 4px; margin: 20px 0 16px; border-bottom: 1px solid var(--grid); overflow-x: auto; }
+nav button {
+  font: inherit; color: var(--ink-2); background: none; border: 0; padding: 8px 12px;
+  border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+}
+nav button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+nav button:hover { background: var(--wash); }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 16px; align-items: end; }
+label { display: grid; gap: 4px; color: var(--ink-2); font-size: 12px; }
+select, input, .go {
+  font: inherit; font-size: 14px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--axis); border-radius: 6px; padding: 6px 8px; min-height: 34px;
+}
+.go { cursor: pointer; font-weight: 600; }
+.go:hover { background: var(--wash); }
+.loading { opacity: 0.5; transition: opacity 0.15s; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .label { fill: var(--ink-2); font-size: 12px; }
+.chart .overlay { fill: transparent; cursor: crosshair; outline: none; }
+.chart .overlay:focus-visible { stroke: var(--axis); }
+.tip {
+  position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); font-size: 12px;
+  min-width: 160px; display: none; z-index: 2;
+}
+.tip .when { color: var(--muted); margin-bottom: 4px; }
+.tip .row { display: grid; grid-template-columns: 14px auto 1fr; gap: 6px; align-items: center; }
+.tip strong { font-variant-numeric: tabular-nums; }
+.key { width: 14px; height: 2px; display: inline-block; border-radius: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 4px; color: var(--ink-2); font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.empty { color: var(--ink-2); padding: 32px 8px; text-align: center; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+th:first-child, td:first-child { text-align: left; }
+td small { display: block; color: var(--muted); font-size: 11px; }
+.name { display: inline-flex; align-items: center; gap: 8px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.notes p { margin: 0 0 6px; color: var(--ink-2); }
+pre {
+  margin: 0; white-space: pre; overflow-x: auto; font: 12.5px/1.55 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: var(--ink);
+}
+.error { color: var(--s8); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>marrow</h1>
+    <span class="sub" id="repo"></span>
+    <span class="health" id="health"><span class="dot" style="background: var(--axis)"></span><span>checking</span></span>
+  </header>
+
+  <nav role="tablist">
+    <button role="tab" data-tab="survival" aria-selected="true">Survival</button>
+    <button role="tab" data-tab="sessions" aria-selected="false">Sessions</button>
+    <button role="tab" data-tab="explain" aria-selected="false">Explain a line</button>
+    <button role="tab" data-tab="doctor" aria-selected="false">Health</button>
+  </nav>
+
+  <section id="tab-survival">
+    <div class="filters">
+      <label>Compare by
+        <select id="by">
+          <option value="origin">origin</option>
+          <option value="role">syntactic role</option>
+          <option value="file">file born in</option>
+        </select>
+      </label>
+      <label>Death
+        <select id="death">
+          <option value="0">deleted</option>
+          <option value="1">deleted, or rewritten</option>
+        </select>
+      </label>
+      <label>Rewritten below similarity
+        <select id="threshold">
+          <option>0.3</option><option>0.4</option><option selected>0.5</option><option>0.6</option><option>0.7</option>
+        </select>
+      </label>
+      <label>Bootstrap resamples
+        <select id="resamples">
+          <option value="0">none (fast)</option><option value="200" selected>200</option><option value="1000">1000</option>
+        </select>
+      </label>
+    </div>
+    <div id="survival">
+      <div class="card">
+        <h2 id="chart-title">Survival since first commit</h2>
+        <div class="muted" id="chart-sub"></div>
+        <div class="legend" id="legend"></div>
+        <div class="chart" id="chart"><div class="empty">Loading…</div></div>
+      </div>
+      <div class="card">
+        <h2>The numbers</h2>
+        <div class="muted" id="table-sub"></div>
+        <div class="table-wrap" id="table"></div>
+      </div>
+      <div class="card">
+        <h2>How the rewritten death depends on its threshold</h2>
+        <div class="muted" id="sweep-sub"></div>
+        <div class="table-wrap" id="sweep"></div>
+      </div>
+      <div class="card notes" id="notes" hidden></div>
+    </div>
+  </section>
+
+  <section id="tab-sessions" hidden>
+    <div class="filters">
+      <label>Agent session
+        <select id="session"></select>
+      </label>
+    </div>
+    <div class="card"><pre id="status">Loading…</pre></div>
+  </section>
+
+  <section id="tab-explain" hidden>
+    <form class="filters" id="explain-form">
+      <label>Line, as file:line from the repository root
+        <input id="target" placeholder="src/main.rs:12" size="36" autocomplete="off" spellcheck="false">
+      </label>
+      <button class="go" type="submit">Explain</button>
+    </form>
+    <div class="card"><pre id="explanation" class="muted">Name a line to see where it was born, every change marrow recorded with the score and rule behind it, and where it is now.</pre></div>
+  </section>
+
+  <section id="tab-doctor" hidden>
+    <div class="card"><pre id="doctor">Loading…</pre></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+// Everything shown comes from the store or the repository, so it goes into the page as text,
+// never as markup.
+function el(tag, attributes, ...children) {
+  const svg = ["svg", "path", "line", "text", "rect", "g", "polygon"].includes(tag);
+  const node = svg ? document.createElementNS("http://www.w3.org/2000/svg", tag) : document.createElement(tag);
+  for (const [name, value] of Object.entries(attributes || {})) {
+    if (value !== null && value !== undefined && value !== false) node.setAttribute(name, value);
+  }
+  for (const child of children.flat()) {
+    if (child === null || child === undefined) continue;
+    node.append(typeof child === "string" || typeof child === "number" ? document.createTextNode(String(child)) : child);
+  }
+  return node;
+}
+const $ = (id) => document.getElementById(id);
+const SLOTS = 8;
+const color = (index) => `var(--s${(index % SLOTS) + 1})`;
+const days = (d) => d === null || d === undefined ? "not reached" : d < 10 ? `${d.toFixed(1)} days` : `${d.toFixed(0)} days`;
+const fixed = (value, digits = 3) => value === null || value === undefined ? "–" : value.toFixed(digits);
+
+async function get(path) {
+  const response = await fetch(path, { cache: "no-store" });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
+  return body;
+}
+
+// Tabs
+const loaded = new Set();
+for (const button of document.querySelectorAll("nav button")) {
+  button.addEventListener("click", () => show(button.dataset.tab));
+}
+function show(tab) {
+  for (const button of document.querySelectorAll("nav button")) {
+    button.setAttribute("aria-selected", String(button.dataset.tab === tab));
+    $(`tab-${button.dataset.tab}`).hidden = button.dataset.tab !== tab;
+  }
+  if (tab === "doctor" && !loaded.has("doctor")) { loaded.add("doctor"); loadDoctor(); }
+  if (tab === "sessions" && !loaded.has("sessions")) { loaded.add("sessions"); loadStatus(); }
+}
+
+// Header and health
+let overview = null;
+async function loadOverview() {
+  try {
+    overview = await get("/api/overview");
+    $("repo").textContent = `${overview.repository || ""} · engine ${overview.version}`;
+    document.title = `${overview.repository || "Marrow"} · Marrow Dashboard`;
+    const select = $("session");
+    select.replaceChildren();
+    if (overview.sessions.length === 0) select.append(el("option", { value: "" }, "no sessions yet"));
+    for (const session of overview.sessions) {
+      const started = new Date(session.started_at * 1000).toLocaleString();
+      select.append(el("option", { value: session.id }, `${started}${session.model ? " · " + session.model : ""} · ${session.id.slice(0, 8)}`));
+    }
+  } catch (error) {
+    $("repo").textContent = error.message;
+  }
+}
+let doctorResult = null;
+async function loadDoctor() {
+  try {
+    doctorResult = doctorResult || await get("/api/doctor");
+    $("doctor").textContent = doctorResult.text;
+    const health = $("health");
+    health.replaceChildren(
+      el("span", { class: "dot", style: `background: var(${doctorResult.healthy ? "--good" : "--warning"})` }),
+      el("span", {}, doctorResult.healthy ? "✓ watching this repository" : "! needs attention: see Health"),
+    );
+  } catch (error) {
+    $("doctor").textContent = error.message;
+    $("doctor").className = "error";
+  }
+}
+async function loadStatus() {
+  const pre = $("status");
+  pre.classList.add("loading");
+  try {
+    const session = $("session").value;
+    const result = await get(`/api/status${session ? "?session=" + encodeURIComponent(session) : ""}`);
+    pre.textContent = result.text;
+    pre.className = "";
+  } catch (error) {
+    pre.textContent = error.message;
+    pre.className = "error";
+  }
+}
+$("session").addEventListener("change", loadStatus);
+
+$("explain-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const target = $("target").value.trim();
+  const pre = $("explanation");
+  if (!target) return;
+  pre.classList.add("loading");
+  try {
+    const result = await get(`/api/explain?target=${encodeURIComponent(target)}`);
+    pre.textContent = result.text;
+    pre.className = "";
+  } catch (error) {
+    pre.textContent = error.message;
+    pre.className = "error";
+  }
+});
+
+// Survival
+let report = null;
+let request = 0;
+async function loadReport() {
+  const ask = ++request;
+  const query = new URLSearchParams({ by: $("by").value, threshold: $("threshold").value, resamples: $("resamples").value });
+  $("survival").classList.add("loading");
+  try {
+    const result = await get(`/api/report?${query}`);
+    if (ask !== request) return;
+    report = result;
+    renderReport();
+  } catch (error) {
+    if (ask !== request) return;
+    $("chart").replaceChildren(el("div", { class: "empty error" }, error.message));
+  } finally {
+    if (ask === request) $("survival").classList.remove("loading");
+  }
+}
+for (const id of ["by", "threshold", "resamples"]) $(id).addEventListener("change", loadReport);
+$("death").addEventListener("change", () => report && renderReport());
+
+function renderReport() {
+  const table = report.tables[Number($("death").value)];
+  const resampled = report.resamples > 0;
+  $("chart-sub").textContent = `Turnbull's estimator${resampled ? `, shaded ${Math.round(report.level * 100)}% bootstrap band from ${report.resamples} resamples` : ""}. Each curve stops where fewer than ${report.min_known_alive} of its lines are still known to be alive.`;
+  if (!table) {
+    $("legend").replaceChildren();
+    $("chart").replaceChildren(el("div", { class: "empty" }, "Nothing to report yet: no line has reached a commit since marrow started watching."));
+    $("table").replaceChildren();
+    $("sweep").replaceChildren();
+    $("table-sub").textContent = "";
+    $("sweep-sub").textContent = "";
+    renderNotes();
+    return;
+  }
+  $("chart-title").textContent = table.label.replace("Death: ", "Survival since first commit · death: ");
+  $("legend").replaceChildren(...report.groups.map((group, index) =>
+    el("span", {}, el("span", { class: "key", style: `background: ${color(index)}` }), `${group.name} (${group.lines.toLocaleString()} lines)`)));
+  drawChart(table);
+  renderTable(table);
+  renderSweep();
+  renderNotes();
+}
+
+function niceStep(span, target) {
+  const raw = span / target;
+  const power = Math.pow(10, Math.floor(Math.log10(raw)));
+  const unit = raw / power;
+  return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power;
+}
+
+// Survival at age t, read off a curve's corners; the curve is straight between them.
+function survivalAt(curve, t) {
+  if (!curve.length || t > curve[curve.length - 1][0]) return null;
+  for (let i = 1; i < curve.length; i++) {
+    const [t0, s0] = curve[i - 1];
+    const [t1, s1] = curve[i];
+    if (t <= t1) return t1 === t0 ? s1 : s0 + (s1 - s0) * (t - t0) / (t1 - t0);
+  }
+  return curve[0][1];
+}
+function bandAt(band, t) {
+  if (!band.length || t > band[band.length - 1][0]) return null;
+  let best = band[0];
+  for (const point of band) if (Math.abs(point[0] - t) < Math.abs(best[0] - t)) best = point;
+  return best[1] === null || best[2] === null ? null : [best[1], best[2]];
+}
+
+function drawChart(table) {
+  const host = $("chart");
+  const drawn = table.rows.map((row) => row.drawn_days);
+  const horizon = Math.max(0, ...drawn);
+  if (horizon <= 0) {
+    host.replaceChildren(el("div", { class: "empty" }, `No curve is drawn yet: none has ${report.min_known_alive} lines followed long enough to show a shape.`));
+    return;
+  }
+  const labelled = report.groups.length <= 4;
+  const width = Math.max(320, host.clientWidth || 760);
+  const height = 300;
+  const margin = { top: 12, right: labelled && width > 520 ? 150 : 16, bottom: 34, left: 44 };
+  const plotW = width - margin.left - margin.right;
+  const plotH = height - margin.top - margin.bottom;
+  const step = niceStep(horizon, 6);
+  const xMax = Math.ceil(horizon / step) * step;
+  const x = (t) => margin.left + (t / xMax) * plotW;
+  const y = (s) => margin.top + (1 - s) * plotH;
+  const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img", "aria-label": "Survival curves; the table below lists the same numbers" });
+
+  for (const s of [0, 0.25, 0.5, 0.75, 1]) {
+    svg.append(el("line", { x1: margin.left, x2: margin.left + plotW, y1: y(s), y2: y(s), stroke: s === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    svg.append(el("text", { x: margin.left - 8, y: y(s) + 4, "text-anchor": "end" }, s.toFixed(2)));
+  }
+  for (let t = 0; t <= xMax + 1e-9; t += step) {
+    svg.append(el("text", { x: x(t), y: margin.top + plotH + 18, "text-anchor": "middle" }, Number(t.toFixed(6)).toString()));
+  }
+  svg.append(el("text", { x: margin.left + plotW / 2, y: height - 2, "text-anchor": "middle" }, "days since first commit"));
+
+  table.rows.forEach((row, index) => {
+    const band = row.band.filter((point) => point[1] !== null && point[2] !== null);
+    if (band.length > 1) {
+      const upper = band.map((p) => `${x(p[0])},${y(p[2])}`);
+      const lower = band.slice().reverse().map((p) => `${x(p[0])},${y(p[1])}`);
+      svg.append(el("polygon", { points: upper.concat(lower).join(" "), fill: color(index), "fill-opacity": 0.12 }));
+    }
+  });
+  const ends = [];
+  table.rows.forEach((row, index) => {
+    if (row.curve.length < 2) return;
+    const d = row.curve.map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join("");
+    svg.append(el("path", { d, fill: "none", stroke: "var(--surface)", "stroke-width": 5, "stroke-linejoin": "round" }));
+    svg.append(el("path", { d, fill: "none", stroke: color(index), "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    const last = row.curve[row.curve.length - 1];
+    ends.push({ index, x: x(last[0]), y: y(last[1]) });
+  });
+  if (labelled && margin.right > 100) {
+    // Direct labels at each curve's end, nudged apart so they don't overlap.
+    ends.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
+    for (const end of ends) {
+      const name = report.groups[end.index].name;
+      svg.append(el("text", { class: "label", x: Math.min(end.x + 8, width - margin.right + 8), y: end.y + 4 }, name.length > 22 ? "…" + name.slice(-21) : name));
+    }
+  }
+
+  const rule = el("line", { y1: margin.top, y2: margin.top + plotH, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" });
+  svg.append(rule);
+  const overlay = el("rect", { class: "overlay", x: margin.left, y: margin.top, width: plotW, height: plotH, tabindex: 0, "aria-label": "Move along the curves with the arrow keys" });
+  svg.append(overlay);
+  const tip = el("div", { class: "tip", role: "status" });
+  host.replaceChildren(svg, tip);
+
+  let at = 0;
+  const point = (t) => {
+    at = Math.max(0, Math.min(horizon, t));
+    rule.setAttribute("x1", x(at)); rule.setAttribute("x2", x(at)); rule.setAttribute("visibility", "visible");
+    const rows = table.rows.map((row, index) => {
+      const survival = survivalAt(row.curve, at);
+      if (survival === null) return null;
+      const band = bandAt(row.band, at);
+      return el("div", { class: "row" },
+        el("span", { class: "key", style: `background: ${color(index)}` }),
+        el("strong", {}, survival.toFixed(3)),
+        el("span", { class: "muted" }, `${report.groups[index].name}${band ? ` (${band[0].toFixed(3)}–${band[1].toFixed(3)})` : ""}`));
+    }).filter(Boolean);
+    tip.replaceChildren(el("div", { class: "when" }, `day ${at < 10 ? at.toFixed(1) : at.toFixed(0)}`), ...rows);
+    tip.style.display = "block";
+    const left = x(at) + 14;
+    tip.style.left = `${left + tip.offsetWidth > width ? x(at) - tip.offsetWidth - 14 : left}px`;
+    tip.style.top = `${margin.top}px`;
+  };
+  const hide = () => { tip.style.display = "none"; rule.setAttribute("visibility", "hidden"); };
+  overlay.addEventListener("pointermove", (event) => {
+    const box = svg.getBoundingClientRect();
+    const px = (event.clientX - box.left) * (width / box.width);
+    point(((px - margin.left) / plotW) * xMax);
+  });
+  overlay.addEventListener("pointerleave", hide);
+  overlay.addEventListener("focus", () => point(at));
+  overlay.addEventListener("blur", hide);
+  overlay.addEventListener("keydown", (event) => {
+    const nudge = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+    if (nudge) { event.preventDefault(); point(at + nudge * step / 10); }
+  });
+}
+
+function intervalText(interval, format) {
+  if (!interval) return "";
+  if (interval.low === null) return "";
+  return interval.high === null ? `at least ${format(interval.low)}` : `${format(interval.low)}–${format(interval.high)}`;
+}
+
+function renderTable(table) {
+  const resampled = report.resamples > 0;
+  $("table-sub").textContent = `Survival at each age${resampled ? `, with its ${Math.round(report.level * 100)}% interval` : ""}, and how many lines were known alive there. A dash is past the data.`;
+  const ages = table.rows[0].at.map((cell) => cell.days);
+  const head = el("tr", {}, el("th", {}, report.by === "origin" ? "origin" : report.by === "role" ? "syntactic role" : "file born in"),
+    el("th", {}, "lines"), el("th", {}, "deaths"), el("th", {}, "followed"),
+    ...ages.map((d) => el("th", {}, d === 1 ? "1 day" : `${d} days`)), el("th", {}, "median"));
+  const rows = table.rows.map((row, index) => el("tr", {},
+    el("td", {}, el("span", { class: "name", title: report.groups[index].name },
+      el("span", { class: "key", style: `background: ${color(index)}` }), report.groups[index].name)),
+    el("td", {}, row.lines.toLocaleString()),
+    el("td", {}, row.deaths.toLocaleString()),
+    el("td", {}, days(row.followed_days)),
+    ...row.at.map((cell) => cell.survival === null
+      ? el("td", { class: "muted" }, "–")
+      : el("td", {}, fixed(cell.survival), el("small", {}, [intervalText(cell.interval, fixed), `${cell.known_alive.toLocaleString()} known alive`].filter(Boolean).join(" · ")))),
+    el("td", {}, days(row.median.days), el("small", {}, intervalText(row.median.interval, days))),
+  ));
+  $("table").replaceChildren(el("table", {}, el("thead", {}, head), el("tbody", {}, rows)));
+}
+
+function renderSweep() {
+  const sweep = report.sweep;
+  if (!sweep || sweep.at_days === null) {
+    $("sweep-sub").textContent = "This needs at least a day of follow-up; there isn't that much yet.";
+    $("sweep").replaceChildren();
+    return;
+  }
+  $("sweep-sub").textContent = `Survival at ${sweep.at_days} ${sweep.at_days === 1 ? "day" : "days"}, when a line counts as rewritten once it is less than this similar to the version first committed.`;
+  const head = el("tr", {}, el("th", {}, "similarity below"), ...sweep.thresholds.map((t) => el("th", {}, t.toFixed(2))));
+  const rows = sweep.cells.map((cells, index) => el("tr", {},
+    el("td", {}, el("span", { class: "name" }, el("span", { class: "key", style: `background: ${color(index)}` }), report.groups[index].name)),
+    ...cells.map((cell) => el("td", cell === null ? { class: "muted" } : {}, fixed(cell)))));
+  $("sweep").replaceChildren(el("table", {}, el("thead", {}, head), el("tbody", {}, rows)));
+}
+
+function renderNotes() {
+  const notes = [];
+  if (report.confound) notes.push(report.confound);
+  if (report.unconverged) notes.push("At least one fit stopped at its iteration limit before converging, so its numbers may be slightly off.");
+  const left = report.left_out;
+  if (left.already_there > 0) notes.push(`Left out: ${left.already_there.toLocaleString()} ${left.already_there === 1 ? "line was" : "lines were"} already there when marrow started watching, so ${left.already_there === 1 ? "its" : "their"} age is unknown.`);
+  if (left.inconsistent > 0) notes.push(`Left out: ${left.inconsistent.toLocaleString()} ${left.inconsistent === 1 ? "line has" : "lines have"} recorded times that run backwards by more than an hour, which only wrong dates in the history can cause.`);
+  const uncommitted = left.agent_deleted_uncommitted + left.agent_pending;
+  if (uncommitted > 0) notes.push(`Left out: ${uncommitted.toLocaleString()} of the ${left.agent_written.toLocaleString()} lines agents wrote haven't reached a commit: ${left.agent_deleted_uncommitted.toLocaleString()} were deleted before one did, and ${left.agent_pending.toLocaleString()} are still uncommitted.`);
+  $("notes").hidden = notes.length === 0;
+  $("notes").replaceChildren(...notes.map((note) => el("p", {}, note)));
+}
+
+let resizing = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizing);
+  resizing = setTimeout(() => report && renderReport(), 150);
+});
+
+loadOverview();
+loadDoctor();
+loadReport();
+</script>
+</body>
+</html>

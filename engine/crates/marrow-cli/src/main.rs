@@ -12,6 +12,7 @@ mod paths;
 mod reconcile;
 mod record;
 mod report;
+mod serve;
 mod status;
 mod survival;
 
@@ -84,6 +85,13 @@ enum Command {
         /// Seed for the resampling, so a report can be reproduced exactly.
         #[arg(long, default_value_t = 1)]
         seed: u64,
+    },
+    /// Open the dashboard: the report, sessions, line histories and health checks in a browser,
+    /// served on this machine only.
+    Serve {
+        /// Port on 127.0.0.1 to listen on; 0 picks a free one.
+        #[arg(long, default_value_t = 4747)]
+        port: u16,
     },
     /// What happened to the lines an agent session wrote, beside how lines here usually fare.
     Status {
@@ -159,6 +167,13 @@ fn main() -> ExitCode {
                 }),
             )
         }
+        Some(Command::Serve { port }) => match serve::serve(port) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("marrow serve: {message}");
+                ExitCode::FAILURE
+            }
+        },
         Some(Command::Status { session }) => {
             print_or_fail("status", status::status(session.as_deref()))
         }

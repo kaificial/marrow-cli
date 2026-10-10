@@ -1,6 +1,9 @@
 //! `marrow report`: survival curves, by origin, syntactic role, or file (PRD §7.1), for both of
 //! PRD §6's definitions of death, with 95% bootstrap intervals and the threshold sweep PRD §9.3
 //! asks for.
+//!
+//! The numbers are worked out once, by `compute`, and then either printed for the terminal or
+//! handed to `marrow serve` as JSON, so the dashboard can never disagree with the report.
 
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -8,6 +11,7 @@ use std::fmt::Write;
 use marrow_core::history::Repository;
 use marrow_stats::{bootstrap, Estimate, Interval, Observation};
 use marrow_store::Store;
+use serde_json::{json, Value};
 
 use crate::capture::repository_root;
 use crate::paths::Paths;
@@ -18,6 +22,22 @@ pub enum By {
     Origin,
     Role,
     File,
+}
+
+impl By {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            By::Origin => "origin",
+            By::Role => "role",
+            By::File => "file",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<By> {
+        [By::Origin, By::Role, By::File]
+            .into_iter()
+            .find(|by| by.as_str() == text)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -39,6 +59,8 @@ const LEVEL: f64 = 0.95;
 /// death more or less swings it too far to read anything into its shape.
 const MIN_KNOWN_ALIVE: usize = 10;
 const CELL: usize = 21;
+/// How many evenly spaced ages the dashboard's confidence band is worked out at.
+const BAND_POINTS: usize = 41;
 
 const CONFOUND: &str = "Agent and human lines weren't written for the same tasks, so these \
                         curves compare the code that survived, not the skill of whoever wrote it.";
@@ -78,8 +100,8 @@ struct Row {
     /// How far the curve can be drawn: while at least MIN_KNOWN_ALIVE lines are known alive.
     drawn: f64,
     estimate: Estimate,
-    /// Intervals at each of TIMES, then the median's; empty when the report was asked for
-    /// without resampling.
+    /// Intervals at each of TIMES, then the median's, then the band's points; empty when the
+    /// report was asked for without resampling.
     bands: Vec<Interval>,
     /// Lines known alive at each of TIMES.
     known_alive: Vec<usize>,
@@ -162,6 +184,8 @@ pub fn compute(options: &Options) -> Result<Report, String> {
                 .iter()
                 .map(|&index| population.clusters[index])
                 .collect();
+            // Each statistic gets its own interval from the same resamples, so the band's points
+            // added at the end leave the numbers before them exactly as they were.
             let bands = if options.resamples > 0 {
                 bootstrap(
                     &observations,
@@ -173,6 +197,7 @@ pub fn compute(options: &Options) -> Result<Report, String> {
                         let mut values: Vec<Option<f64>> =
                             TIMES.iter().map(|&t| Some(estimate.survival(t))).collect();
                         values.push(estimate.median());
+                        values.extend(band_ages(drawn).map(|t| Some(estimate.survival(t))));
                         values
                     },
                 )
@@ -207,6 +232,12 @@ pub fn compute(options: &Options) -> Result<Report, String> {
         sweep: Some(sweep),
         left_out,
     })
+}
+
+/// The ages the dashboard's band is drawn at, evenly spaced up to where the curve stops.
+fn band_ages(drawn: f64) -> impl Iterator<Item = f64> {
+    let points = if drawn > 0.0 { BAND_POINTS } else { 0 };
+    (0..points).map(move |index| drawn * index as f64 / (BAND_POINTS - 1) as f64)
 }
 
 /// The report as the terminal shows it.
@@ -313,6 +344,116 @@ fn death_label(death: Death) -> String {
              first committed"
         ),
     }
+}
+
+/// The report as `marrow serve` sends it. Ages are in days; an interval end of null lies beyond
+/// the data, and a survival of null is past the last age any line was known to be alive.
+pub fn to_json(report: &Report) -> Value {
+    let options = &report.options;
+    let interval = |band: Option<&Interval>| match band {
+        Some(band) => json!({"low": band.low, "high": band.high}),
+        None => Value::Null,
+    };
+    let tables: Vec<Value> = report
+        .tables
+        .iter()
+        .map(|table| {
+            let rows: Vec<Value> = table
+                .rows
+                .iter()
+                .map(|row| {
+                    let at: Vec<Value> = TIMES
+                        .iter()
+                        .enumerate()
+                        .map(|(index, &t)| {
+                            let known = t <= row.known;
+                            json!({
+                                "days": t,
+                                "survival": known.then(|| row.estimate.survival(t)),
+                                "interval": if known {
+                                    interval(row.bands.get(index))
+                                } else {
+                                    Value::Null
+                                },
+                                "known_alive": row.known_alive[index],
+                            })
+                        })
+                        .collect();
+                    // The curve's corners up to where it is drawn, ending exactly there.
+                    let mut curve: Vec<Value> = row
+                        .estimate
+                        .curve()
+                        .into_iter()
+                        .take_while(|&(t, _)| t < row.drawn)
+                        .map(|(t, survival)| json!([t, survival]))
+                        .collect();
+                    if row.drawn > 0.0 {
+                        curve.push(json!([row.drawn, row.estimate.survival(row.drawn)]));
+                    }
+                    let band: Vec<Value> = band_ages(row.drawn)
+                        .zip(row.bands.iter().skip(TIMES.len() + 1))
+                        .map(|(t, band)| json!([t, band.low, band.high]))
+                        .collect();
+                    json!({
+                        "lines": row.lines,
+                        "deaths": row.deaths,
+                        "followed_days": row.followed,
+                        "known_until_days": row.known,
+                        "drawn_days": row.drawn,
+                        "at": at,
+                        "median": {
+                            "days": row.estimate.median(),
+                            "interval": interval(row.bands.get(TIMES.len())),
+                        },
+                        "curve": curve,
+                        "band": band,
+                    })
+                })
+                .collect();
+            let (death, threshold) = match table.death {
+                Death::Deleted => ("deleted", None),
+                Death::Rewritten(threshold) => ("rewritten", Some(threshold)),
+            };
+            json!({
+                "death": death,
+                "threshold": threshold,
+                "label": death_label(table.death),
+                "rows": rows,
+            })
+        })
+        .collect();
+    let sweep = report.sweep.as_ref().map(|sweep| {
+        json!({
+            "at_days": sweep.at,
+            "thresholds": SWEEP,
+            "cells": sweep.cells,
+        })
+    });
+    let left = &report.left_out;
+    json!({
+        "by": options.by.as_str(),
+        "rewrite_threshold": options.threshold,
+        "resamples": options.resamples,
+        "seed": options.seed,
+        "level": LEVEL,
+        "min_known_alive": MIN_KNOWN_ALIVE,
+        "groups": report
+            .groups
+            .iter()
+            .map(|group| json!({"name": group.name, "lines": group.lines.len()}))
+            .collect::<Vec<_>>(),
+        "tables": tables,
+        "confound": report.confounded.then_some(CONFOUND),
+        "unconverged": report.unconverged,
+        "sweep": sweep,
+        "left_out": {
+            "already_there": left.already_there,
+            "inconsistent": left.inconsistent,
+            "agent_deleted_uncommitted": left.agent_deleted_uncommitted,
+            "agent_pending": left.agent_pending,
+            "agent_written": left.agent_written,
+        },
+    })
 }
 
 fn groups(population: &Population, by: By, root: &std::path::Path) -> Result<Vec<Group>, String> {
