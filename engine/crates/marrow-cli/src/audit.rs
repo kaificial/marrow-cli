@@ -96,9 +96,11 @@ fn cell(value: &Cell) -> Value {
         Cell::Text(text) => json!(text),
         Cell::Blob(bytes) if !bytes.is_empty() && bytes.len() % 8 == 0 => json!({
             "u64": bytes
-                .chunks_exact(8)
+                .as_chunks::<8>()
+                .0
+                .iter()
                 .map(|chunk| {
-                    let value = u64::from_le_bytes(chunk.try_into().expect("eight bytes"));
+                    let value = u64::from_le_bytes(*chunk);
                     format!("{value:016x}")
                 })
                 .collect::<Vec<_>>()
