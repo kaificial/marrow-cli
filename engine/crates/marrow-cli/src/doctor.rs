@@ -1,6 +1,7 @@
 //! `marrow doctor`: is marrow actually watching this repository, and can this build of it be
-//! trusted (PRD §7.1)? Four checks: the Claude Code write hook, the git hooks, how much of
-//! the history the store holds, and the mutation-corpus result for this exact build.
+//! trusted (PRD §7.1)? Five checks: the Claude Code write hook, the hooks around Bash commands,
+//! the git hooks, how much of the history the store holds, and the mutation-corpus result for
+//! this exact build.
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -66,6 +67,8 @@ pub fn doctor() -> Result<Checkup, String> {
 
     let (verdict, detail) = write_hook(&root);
     report.check(verdict, "write hook", &detail);
+    let (verdict, detail) = bash_hook(&root);
+    report.check(verdict, "bash hook", &detail);
     let (verdict, detail) = commit_hook(&root);
     report.check(verdict, "commit hook", &detail);
 
@@ -101,13 +104,7 @@ pub fn doctor() -> Result<Checkup, String> {
 /// The hook counts if a `PostToolUse` entry whose matcher covers both Edit and Write runs a
 /// command that mentions marrow.
 pub(crate) fn write_hook(root: &Path) -> (Verdict, String) {
-    let mut places = vec![
-        root.join(".claude").join("settings.json"),
-        root.join(".claude").join("settings.local.json"),
-    ];
-    if let Some(home) = home_directory() {
-        places.push(home.join(".claude").join("settings.json"));
-    }
+    let places = settings_places(root);
     let mut partial = None;
     let mut stale = None;
     for place in &places {
@@ -170,15 +167,25 @@ enum Coverage {
 }
 
 fn registered(settings: &Value) -> Coverage {
+    match (
+        runs_marrow_on(settings, "PostToolUse", "Edit"),
+        runs_marrow_on(settings, "PostToolUse", "Write"),
+    ) {
+        (true, true) => Coverage::Full,
+        (false, false) => Coverage::None,
+        _ => Coverage::Partial,
+    }
+}
+
+/// Whether a hook for `event` whose matcher covers `tool` runs marrow.
+pub(crate) fn runs_marrow_on(settings: &Value, event: &str, tool: &str) -> bool {
     let Some(entries) = settings
-        .pointer("/hooks/PostToolUse")
+        .pointer(&format!("/hooks/{event}"))
         .and_then(Value::as_array)
     else {
-        return Coverage::None;
+        return false;
     };
-    let mut edit = false;
-    let mut write = false;
-    for entry in entries {
+    entries.iter().any(|entry| {
         let runs_marrow = entry
             .get("hooks")
             .and_then(Value::as_array)
@@ -189,18 +196,54 @@ fn registered(settings: &Value) -> Coverage {
                         .is_some_and(|command| command.contains("marrow"))
                 })
             });
-        if !runs_marrow {
-            continue;
-        }
         let matcher = entry.get("matcher").and_then(Value::as_str).unwrap_or("");
-        edit |= covers(matcher, "Edit");
-        write |= covers(matcher, "Write");
+        runs_marrow && covers(matcher, tool)
+    })
+}
+
+/// Agent edits made through the Bash tool need a hook before the command and one after it.
+pub(crate) fn bash_hook(root: &Path) -> (Verdict, String) {
+    let mut before = None;
+    let mut after = None;
+    for place in settings_places(root) {
+        let Some(settings) = std::fs::read_to_string(&place)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        else {
+            continue;
+        };
+        if before.is_none() && runs_marrow_on(&settings, "PreToolUse", "Bash") {
+            before = Some(place.clone());
+        }
+        if after.is_none() && runs_marrow_on(&settings, "PostToolUse", "Bash") {
+            after = Some(place);
+        }
     }
-    match (edit, write) {
-        (true, true) => Coverage::Full,
-        (false, false) => Coverage::None,
-        _ => Coverage::Partial,
+    match (before, after) {
+        (Some(place), Some(_)) => (
+            Verdict::Ok,
+            format!("registered in {}", shown(root, &place)),
+        ),
+        _ => (
+            Verdict::Warn,
+            "marrow doesn't run before and after Bash commands, so agent edits made through\n\
+             the shell are credited to people. Run: marrow init"
+                .to_owned(),
+        ),
     }
+}
+
+/// Where Claude Code reads hooks from: the project's shared and personal settings, and the
+/// user's own.
+fn settings_places(root: &Path) -> Vec<PathBuf> {
+    let mut places = vec![
+        root.join(".claude").join("settings.json"),
+        root.join(".claude").join("settings.local.json"),
+    ];
+    if let Some(home) = home_directory() {
+        places.push(home.join(".claude").join("settings.json"));
+    }
+    places
 }
 
 /// A hook `marrow init` wrote names the binary by its full path, in quotes. If that file is gone

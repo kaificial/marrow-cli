@@ -4,6 +4,7 @@ use std::process::ExitCode;
 
 mod audit;
 mod backfill;
+mod bash;
 mod capture;
 mod doctor;
 mod explain;
@@ -234,8 +235,15 @@ fn record(
             session: None,
             file: None,
             tool: None,
+            event: None,
+            cwd: None,
+            command: None,
+            tool_use_id: None,
         }
     };
+    if hook && payload.tool.as_deref() == Some("Bash") {
+        return bash_hook(&payload);
+    }
     let (Some(session), Some(file)) = (session.or(payload.session), file.or(payload.file)) else {
         eprintln!(
             "marrow record: needs --session and --file, or --hook with Claude Code's payload on stdin"
@@ -269,6 +277,45 @@ fn record(
         Err(message) => {
             eprintln!("marrow record: {message}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+/// A Bash tool call: note the files before it runs, and record what it changed after. Like any
+/// write, it is never worth failing over.
+fn bash_hook(payload: &record::HookPayload) -> ExitCode {
+    let (Some(session), Some(cwd)) = (payload.session.as_deref(), payload.cwd.as_deref()) else {
+        eprintln!("marrow record: a Bash hook payload needs session_id and cwd");
+        return ExitCode::from(2);
+    };
+    let bash = bash::Payload {
+        session,
+        cwd,
+        key: payload.tool_use_id.as_deref().unwrap_or(session),
+        command: payload.command.as_deref().unwrap_or_default(),
+    };
+    let result = if payload.event.as_deref() == Some("PreToolUse") {
+        bash::before(&bash).map(|()| None)
+    } else {
+        bash::after(&bash)
+    };
+    match result {
+        Ok(Some(outcome)) if outcome.files > 0 => {
+            println!(
+                "marrow record: the command changed {} {}: {} {} born, {} {} changed",
+                outcome.files,
+                plural(outcome.files as i64, "file", "files"),
+                outcome.born,
+                plural(outcome.born as i64, "line", "lines"),
+                outcome.changed,
+                plural(outcome.changed as i64, "line", "lines")
+            );
+            ExitCode::SUCCESS
+        }
+        Ok(_) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("marrow record: {message}");
+            ExitCode::SUCCESS
         }
     }
 }

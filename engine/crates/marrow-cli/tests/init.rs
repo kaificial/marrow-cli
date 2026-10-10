@@ -100,6 +100,7 @@ fn init_sets_up_the_store_and_both_hooks() {
 
     let doctor = String::from_utf8_lossy(&marrow(&directory, &["doctor"]).stdout).into_owned();
     assert!(doctor.contains("ok    write hook"), "{doctor}");
+    assert!(doctor.contains("ok    bash hook"), "{doctor}");
     assert!(doctor.contains("ok    commit hook"), "{doctor}");
 }
 

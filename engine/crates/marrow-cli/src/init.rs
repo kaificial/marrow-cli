@@ -40,14 +40,20 @@ pub fn init() -> Result<Setup, String> {
 
     let executable = std::env::current_exe()
         .map_err(|error| format!("can't find the marrow executable: {error}"))?;
-    let write_hook = match repoint_write_hook(&root, &executable) {
-        Some(outcome) => outcome,
-        None => match doctor::write_hook(&root) {
-            (Verdict::Ok, detail) => Ok(format!("write hook {detail}")),
-            (Verdict::Warn, _) => register_write_hook(&root, &executable),
-        },
+    let repointed = repoint_hooks(&root, &executable);
+    let write_hook = match doctor::write_hook(&root) {
+        (Verdict::Ok, detail) => Ok(format!("write hook {detail}")),
+        (Verdict::Warn, _) => add_hooks(&root, &executable, "write hook", WRITE_HOOKS),
     };
     setup.step(write_hook);
+    let bash_hook = match doctor::bash_hook(&root) {
+        (Verdict::Ok, detail) => Ok(format!("bash hook {detail}")),
+        (Verdict::Warn, _) => add_hooks(&root, &executable, "bash hook", BASH_HOOKS),
+    };
+    setup.step(bash_hook);
+    if let Some(outcome) = repointed {
+        setup.step(outcome);
+    }
 
     setup.step(reconcile::install(Some(&root)).map(|message| format!("commit hook {message}")));
     if doctor::in_build_directory(&executable) {
@@ -98,31 +104,40 @@ fn hook_command(executable: &Path) -> String {
     format!("\"{}\" record --hook", hook_path(executable))
 }
 
-/// Points the write hook entries an earlier init wrote at the binary running now, so installing
-/// marrow somewhere new and running init again moves the hook with it. Entries a person wrote
-/// are left alone. None when there was nothing of init's to change.
-fn repoint_write_hook(root: &Path, executable: &Path) -> Option<Result<String, String>> {
+/// The write hook: after every Edit or Write.
+const WRITE_HOOKS: &[(&str, &str)] = &[("PostToolUse", "Edit|Write")];
+/// Around every Bash command, to see what it changed (docs/decisions/0015-bash-writes.md).
+const BASH_HOOKS: &[(&str, &str)] = &[("PreToolUse", "Bash"), ("PostToolUse", "Bash")];
+
+/// Points the hook entries an earlier init wrote at the binary running now, so installing marrow
+/// somewhere new and running init again moves the hooks with it. Entries a person wrote are left
+/// alone. None when there was nothing of init's to change.
+fn repoint_hooks(root: &Path, executable: &Path) -> Option<Result<String, String>> {
     let path = root.join(".claude").join("settings.local.json");
     let mut settings: Value = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
     let wanted = hook_command(executable);
     let mut changed = false;
-    for entry in settings
-        .pointer_mut("/hooks/PostToolUse")?
-        .as_array_mut()?
-        .iter_mut()
-    {
-        let Some(hooks) = entry.get_mut("hooks").and_then(Value::as_array_mut) else {
+    for event in ["PreToolUse", "PostToolUse"] {
+        let Some(entries) = settings
+            .pointer_mut(&format!("/hooks/{event}"))
+            .and_then(Value::as_array_mut)
+        else {
             continue;
         };
-        for hook in hooks {
-            let Some(command) = hook.get("command").and_then(Value::as_str) else {
+        for entry in entries {
+            let Some(hooks) = entry.get_mut("hooks").and_then(Value::as_array_mut) else {
                 continue;
             };
-            let ours = doctor::quoted_marrow_binary(command)
-                .is_some_and(|binary| command == hook_command(Path::new(&binary)));
-            if ours && command != wanted {
-                hook["command"] = Value::String(wanted.clone());
-                changed = true;
+            for hook in hooks {
+                let Some(command) = hook.get("command").and_then(Value::as_str) else {
+                    continue;
+                };
+                let ours = doctor::quoted_marrow_binary(command)
+                    .is_some_and(|binary| command == hook_command(Path::new(&binary)));
+                if ours && command != wanted {
+                    hook["command"] = Value::String(wanted.clone());
+                    changed = true;
+                }
             }
         }
     }
@@ -132,18 +147,31 @@ fn repoint_write_hook(root: &Path, executable: &Path) -> Option<Result<String, S
     let text = serde_json::to_string_pretty(&settings).expect("a JSON value always serializes");
     Some(
         std::fs::write(&path, format!("{text}\n"))
-            .map(|()| format!("write hook now runs {}", hook_path(executable)))
+            .map(|()| format!("hooks now run {}", hook_path(executable)))
             .map_err(|error| format!("can't write {SETTINGS}: {error}")),
     )
 }
 
-/// Adds a `PostToolUse` entry for Edit and Write to the personal settings file, keeping whatever
-/// else is in it. A file that isn't a JSON object is left alone rather than overwritten.
-fn register_write_hook(root: &Path, executable: &Path) -> Result<String, String> {
+/// Adds hook entries to the personal settings file, keeping whatever else is in it. A file that
+/// isn't a JSON object is left alone rather than overwritten.
+fn add_hooks(
+    root: &Path,
+    executable: &Path,
+    label: &str,
+    wanted: &[(&str, &str)],
+) -> Result<String, String> {
     let command = hook_command(executable);
     let path: PathBuf = root.join(".claude").join("settings.local.json");
-    let by_hand =
-        || format!("Add a PostToolUse hook for Edit|Write to {SETTINGS} that runs:\n{command}");
+    let by_hand = || {
+        let places: Vec<String> = wanted
+            .iter()
+            .map(|(event, matcher)| format!("{event} for {matcher}"))
+            .collect();
+        format!(
+            "Add a hook ({}) to {SETTINGS} that runs:\n{command}",
+            places.join(", ")
+        )
+    };
     let mut settings = match std::fs::read_to_string(&path) {
         Ok(text) if text.trim().is_empty() => Value::Object(Map::new()),
         Ok(text) => match serde_json::from_str::<Value>(&text) {
@@ -158,10 +186,6 @@ fn register_write_hook(root: &Path, executable: &Path) -> Result<String, String>
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Value::Object(Map::new()),
         Err(error) => return Err(format!("can't read {SETTINGS}: {error}\n{}", by_hand())),
     };
-    let entry = json!({
-        "matcher": "Edit|Write",
-        "hooks": [{"type": "command", "command": command}],
-    });
     let hooks = settings
         .as_object_mut()
         .expect("checked above")
@@ -173,19 +197,24 @@ fn register_write_hook(root: &Path, executable: &Path) -> Result<String, String>
             by_hand()
         ));
     };
-    let post = hooks
-        .entry("PostToolUse")
-        .or_insert_with(|| Value::Array(Vec::new()));
-    let Some(post) = post.as_array_mut() else {
-        return Err(format!(
-            "PostToolUse in {SETTINGS} isn't a list, so marrow left it alone.\n{}",
-            by_hand()
-        ));
-    };
-    // An earlier init's entry whose binary has since moved would fail on every write, so it is
-    // replaced rather than left beside the new one.
-    post.retain(|existing| !runs_missing_marrow(existing));
-    post.push(entry);
+    for (event, matcher) in wanted {
+        let entries = hooks
+            .entry(*event)
+            .or_insert_with(|| Value::Array(Vec::new()));
+        let Some(entries) = entries.as_array_mut() else {
+            return Err(format!(
+                "{event} in {SETTINGS} isn't a list, so marrow left it alone.\n{}",
+                by_hand()
+            ));
+        };
+        // An earlier init's entry whose binary has since moved would fail on every call, so it
+        // is replaced rather than left beside the new one.
+        entries.retain(|existing| !runs_missing_marrow(existing));
+        entries.push(json!({
+            "matcher": matcher,
+            "hooks": [{"type": "command", "command": command}],
+        }));
+    }
 
     let directory = root.join(".claude");
     std::fs::create_dir_all(&directory)
@@ -195,7 +224,7 @@ fn register_write_hook(root: &Path, executable: &Path) -> Result<String, String>
         .map_err(|error| format!("can't write {SETTINGS}: {error}\n{}", by_hand()))?;
     // It names a path on this machine, so it is never worth committing.
     keep_out_of_git(root, SETTINGS);
-    Ok(format!("write hook registered in {SETTINGS}"))
+    Ok(format!("{label} registered in {SETTINGS}"))
 }
 
 fn runs_missing_marrow(entry: &Value) -> bool {
