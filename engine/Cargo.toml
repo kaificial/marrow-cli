@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/marrow-cli",
     "crates/marrow-core",
+    "crates/marrow-stats",
     "crates/marrow-store",
 ]
 
@@ -13,6 +14,7 @@ license = "MIT"
 
 [workspace.dependencies]
 marrow-core = { path = "crates/marrow-core" }
+marrow-stats = { path = "crates/marrow-stats" }
 marrow-store = { path = "crates/marrow-store" }
 clap = { version = "4", features = ["derive"] }
 gix = "0.68"
@@ -23,7 +25,7 @@ tree-sitter-typescript = "0.23"
 rusqlite = { version = "0.32", features = ["bundled"] }
 rayon = "1"
 thiserror = "2"
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [workspace.lints.rust]

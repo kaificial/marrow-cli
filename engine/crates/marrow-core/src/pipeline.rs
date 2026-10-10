@@ -136,6 +136,24 @@ enum Normalized {
 
 type NormalizedCache = HashMap<(ObjectId, Language), Normalized>;
 
+/// Reads commits one after another, normalizing each file version only once: a file whose
+/// contents are the same as in the last commit read is not parsed again.
+#[derive(Default)]
+pub struct Loader {
+    cache: NormalizedCache,
+}
+
+impl Loader {
+    /// Every tracked file of a commit. A file the parser gives up on is reported, not fatal.
+    pub fn load(
+        &mut self,
+        repository: &Repository,
+        commit: ObjectId,
+    ) -> Result<CommitSnapshot, Error> {
+        load_commit(repository, commit, &mut self.cache, |_| true)
+    }
+}
+
 pub fn trace_repository(path: &Path) -> Result<Trace, Error> {
     let repository = Repository::open(path)?;
     let commits = repository.first_parent_history()?;

@@ -1,4 +1,3 @@
-
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
 use std::ops::Range;
@@ -416,7 +415,7 @@ fn score_pair(old: &Line, new: &Line) -> Option<(u32, u32)> {
     if unigram_jaccard(old, new) < PREFILTER_MIN_UNIGRAM_JACCARD {
         return None;
     }
-    let shared = shared_bigrams(old, new) as u32;
+    let shared = shared_bigrams(&old.bigrams, &new.bigrams) as u32;
     let total = (old.bigrams.len() + new.bigrams.len()) as u32;
     Some((shared, total))
 }
@@ -694,11 +693,19 @@ pub fn unigram_jaccard(old: &Line, new: &Line) -> f64 {
 
 /// Dice coefficient of the two lines token-pair multisets.
 pub fn dice(old: &Line, new: &Line) -> f64 {
-    2.0 * shared_bigrams(old, new) as f64 / (old.bigrams.len() + new.bigrams.len()) as f64
+    bigram_dice(&old.bigrams, &new.bigrams)
 }
 
-fn shared_bigrams(old: &Line, new: &Line) -> usize {
-    let (a, b) = (&old.bigrams, &new.bigrams);
+/// The same score from stored bigrams alone, so a line's current version can be scored against
+/// a version of it the store kept only as hashes, such as the one it was born with.
+pub fn bigram_dice(a: &[u64], b: &[u64]) -> f64 {
+    if a.is_empty() && b.is_empty() {
+        return 1.0;
+    }
+    2.0 * shared_bigrams(a, b) as f64 / (a.len() + b.len()) as f64
+}
+
+fn shared_bigrams(a: &[u64], b: &[u64]) -> usize {
     let (mut i, mut j, mut shared) = (0, 0, 0);
     while i < a.len() && j < b.len() {
         match a[i].cmp(&b[j]) {
