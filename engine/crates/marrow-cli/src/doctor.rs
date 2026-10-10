@@ -119,7 +119,16 @@ pub(crate) fn write_hook(root: &Path) -> (Verdict, String) {
         };
         match registered(&settings) {
             Coverage::Full => match missing_binary(&settings) {
-                None => return (Verdict::Ok, format!("registered in {}", shown(root, place))),
+                None => {
+                    let built = marrow_binaries(&settings)
+                        .into_iter()
+                        .find(|binary| in_build_directory(Path::new(binary)));
+                    let note = built.map(|binary| build_note(&binary)).unwrap_or_default();
+                    return (
+                        Verdict::Ok,
+                        format!("registered in {}{note}", shown(root, place)),
+                    );
+                }
                 Some(binary) => stale = Some((place, binary)),
             },
             Coverage::Partial => partial = Some(place),
@@ -198,14 +207,45 @@ fn registered(settings: &Value) -> Coverage {
 /// (the binary was moved, or rebuilt elsewhere) the hook fails on every write. Commands that
 /// find marrow some other way, through `PATH` or a script, aren't checked.
 fn missing_binary(settings: &Value) -> Option<String> {
-    let entries = settings.pointer("/hooks/PostToolUse")?.as_array()?;
+    marrow_binaries(settings)
+        .into_iter()
+        .find(|binary| !Path::new(binary).exists())
+}
+
+/// Every marrow binary a PostToolUse hook names by its path.
+fn marrow_binaries(settings: &Value) -> Vec<String> {
+    let Some(entries) = settings
+        .pointer("/hooks/PostToolUse")
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
     entries
         .iter()
         .filter_map(|entry| entry.get("hooks")?.as_array())
         .flatten()
         .filter_map(|hook| hook.get("command")?.as_str())
         .filter_map(quoted_marrow_binary)
-        .find(|binary| !Path::new(binary).exists())
+        .collect()
+}
+
+/// Whether a binary lives in a cargo build directory, which `cargo clean` deletes.
+pub(crate) fn in_build_directory(path: &Path) -> bool {
+    let parts: Vec<String> = path
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().to_lowercase())
+        .collect();
+    parts
+        .windows(2)
+        .any(|pair| pair[0] == "target" && (pair[1] == "debug" || pair[1] == "release"))
+}
+
+/// The hook works, but only until the build directory it points into is cleaned.
+fn build_note(binary: &str) -> String {
+    format!(
+        "\nit runs {binary}, a build that cargo clean deletes. For a lasting hook,\n\
+         install marrow (cargo install --path engine/crates/marrow-cli) and run marrow init again"
+    )
 }
 
 /// The quoted path at the start of `command`, when it names a marrow binary outright.
@@ -235,10 +275,18 @@ fn commit_hook(root: &Path) -> (Verdict, String) {
         Err(_) => None,
     };
     match (runs("post-commit"), runs("post-merge")) {
-        (Some(true), Some(true)) => (
-            Verdict::Ok,
-            "post-commit and post-merge run marrow reconcile".to_owned(),
-        ),
+        (Some(true), Some(true)) => {
+            let built = std::fs::read_to_string(hooks.join("post-commit"))
+                .unwrap_or_default()
+                .lines()
+                .filter_map(quoted_marrow_binary)
+                .find(|binary| in_build_directory(Path::new(binary)));
+            let note = built.map(|binary| build_note(&binary)).unwrap_or_default();
+            (
+                Verdict::Ok,
+                format!("post-commit and post-merge run marrow reconcile{note}"),
+            )
+        }
         (Some(true), Some(false)) => (
             Verdict::Warn,
             "a post-merge hook exists but doesn't run marrow reconcile, so merges and pulls\n\
@@ -395,6 +443,25 @@ fn shown(root: &Path, path: &Path) -> String {
         .display()
         .to_string()
         .replace('\\', "/")
+}
+
+#[cfg(test)]
+mod build_directory_tests {
+    use std::path::Path;
+
+    use super::in_build_directory;
+
+    #[test]
+    fn a_cargo_build_is_told_apart_from_an_installed_binary() {
+        assert!(in_build_directory(Path::new(
+            "C:/src/marrow/engine/target/release/marrow.exe"
+        )));
+        assert!(in_build_directory(Path::new(
+            "/home/me/marrow/target/debug/marrow"
+        )));
+        assert!(!in_build_directory(Path::new("/home/me/.cargo/bin/marrow")));
+        assert!(!in_build_directory(Path::new("/opt/target/marrow")));
+    }
 }
 
 #[cfg(test)]

@@ -40,13 +40,24 @@ pub fn init() -> Result<Setup, String> {
 
     let executable = std::env::current_exe()
         .map_err(|error| format!("can't find the marrow executable: {error}"))?;
-    let write_hook = match doctor::write_hook(&root) {
-        (Verdict::Ok, detail) => Ok(format!("write hook {detail}")),
-        (Verdict::Warn, _) => register_write_hook(&root, &executable),
+    let write_hook = match repoint_write_hook(&root, &executable) {
+        Some(outcome) => outcome,
+        None => match doctor::write_hook(&root) {
+            (Verdict::Ok, detail) => Ok(format!("write hook {detail}")),
+            (Verdict::Warn, _) => register_write_hook(&root, &executable),
+        },
     };
     setup.step(write_hook);
 
     setup.step(reconcile::install(Some(&root)).map(|message| format!("commit hook {message}")));
+    if doctor::in_build_directory(&executable) {
+        setup.note(&format!(
+            "the hooks run {}, a build that cargo clean deletes.\n\
+             For hooks that last, install marrow (cargo install --path engine/crates/marrow-cli)\n\
+             and run marrow init again with the installed one",
+            hook_path(&executable)
+        ));
+    }
     Ok(setup)
 }
 
@@ -65,14 +76,65 @@ impl Setup {
             let _ = writeln!(self.text, "      {line}");
         }
     }
+
+    /// Something worth knowing that doesn't stop marrow working.
+    fn note(&mut self, message: &str) {
+        let mut lines = message.lines();
+        let _ = writeln!(self.text, "note  {}", lines.next().unwrap_or_default());
+        for line in lines {
+            let _ = writeln!(self.text, "      {line}");
+        }
+    }
 }
 
-/// The hook command, with the path in forward slashes so the shell Claude Code runs hooks in
-/// reads it the same way on every platform.
-fn hook_command(executable: &Path) -> String {
+/// The binary's path in forward slashes, so the shell Claude Code runs hooks in reads it the
+/// same way on every platform.
+fn hook_path(executable: &Path) -> String {
     let path = executable.display().to_string().replace('\\', "/");
-    let path = path.strip_prefix("//?/").unwrap_or(&path);
-    format!("\"{path}\" record --hook")
+    path.strip_prefix("//?/").unwrap_or(&path).to_owned()
+}
+
+fn hook_command(executable: &Path) -> String {
+    format!("\"{}\" record --hook", hook_path(executable))
+}
+
+/// Points the write hook entries an earlier init wrote at the binary running now, so installing
+/// marrow somewhere new and running init again moves the hook with it. Entries a person wrote
+/// are left alone. None when there was nothing of init's to change.
+fn repoint_write_hook(root: &Path, executable: &Path) -> Option<Result<String, String>> {
+    let path = root.join(".claude").join("settings.local.json");
+    let mut settings: Value = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
+    let wanted = hook_command(executable);
+    let mut changed = false;
+    for entry in settings
+        .pointer_mut("/hooks/PostToolUse")?
+        .as_array_mut()?
+        .iter_mut()
+    {
+        let Some(hooks) = entry.get_mut("hooks").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for hook in hooks {
+            let Some(command) = hook.get("command").and_then(Value::as_str) else {
+                continue;
+            };
+            let ours = doctor::quoted_marrow_binary(command)
+                .is_some_and(|binary| command == hook_command(Path::new(&binary)));
+            if ours && command != wanted {
+                hook["command"] = Value::String(wanted.clone());
+                changed = true;
+            }
+        }
+    }
+    if !changed {
+        return None;
+    }
+    let text = serde_json::to_string_pretty(&settings).expect("a JSON value always serializes");
+    Some(
+        std::fs::write(&path, format!("{text}\n"))
+            .map(|()| format!("write hook now runs {}", hook_path(executable)))
+            .map_err(|error| format!("can't write {SETTINGS}: {error}")),
+    )
 }
 
 /// Adds a `PostToolUse` entry for Edit and Write to the personal settings file, keeping whatever

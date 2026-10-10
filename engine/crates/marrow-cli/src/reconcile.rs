@@ -631,29 +631,39 @@ pub fn install(repo: Option<&Path>) -> Result<String, String> {
         .map_err(|error| format!("can't create {}: {error}", hooks.display()))?;
     let mut done = Vec::new();
     let mut refused = Vec::new();
+    let script = format!(
+        "#!/bin/sh\n\
+         {INSTALLED}\n\
+         # Its exit code is ignored by git, so a marrow problem can never fail a commit.\n\
+         {command} || true\n"
+    );
     for name in HOOKS {
         let hook = hooks.join(name);
-        if let Ok(current) = std::fs::read_to_string(&hook) {
-            if current.contains("marrow") {
+        let verb = match std::fs::read_to_string(&hook) {
+            // A hook marrow wrote is marrow's to rewrite, so running init with another binary
+            // points it there. One a person wrote, or added marrow to, is left as it is.
+            Ok(current) if current == script => {
                 done.push(format!("{} already runs marrow", display(&hook)));
-            } else {
+                continue;
+            }
+            Ok(current) if current.contains(INSTALLED) => "updated",
+            Ok(current) if current.contains("marrow") => {
+                done.push(format!("{} already runs marrow", display(&hook)));
+                continue;
+            }
+            Ok(_) => {
                 refused.push(format!(
                     "{} already exists. Add this line to it:\n{command}",
                     display(&hook)
                 ));
+                continue;
             }
-            continue;
-        }
-        let script = format!(
-            "#!/bin/sh\n\
-             # Installed by marrow. Records a commit-anchored checkpoint of every tracked line.\n\
-             # Its exit code is ignored by git, so a marrow problem can never fail a commit.\n\
-             {command} || true\n"
-        );
-        std::fs::write(&hook, script)
+            Err(_) => "installed",
+        };
+        std::fs::write(&hook, &script)
             .map_err(|error| format!("can't write {}: {error}", display(&hook)))?;
         make_executable(&hook);
-        done.push(format!("installed {}", display(&hook)));
+        done.push(format!("{verb} {}", display(&hook)));
     }
     if refused.is_empty() {
         Ok(done.join("; "))
@@ -669,6 +679,10 @@ pub fn install(repo: Option<&Path>) -> Result<String, String> {
 /// The git hooks that reconcile. A merge or a pull makes a commit without running post-commit,
 /// so post-merge covers those.
 const HOOKS: [&str; 2] = ["post-commit", "post-merge"];
+
+/// The line that marks a git hook as one marrow wrote.
+const INSTALLED: &str =
+    "# Installed by marrow. Records a commit-anchored checkpoint of every tracked line.";
 
 /// Canonical paths on Windows carry a `\\?\` prefix, which is noise in a message.
 fn display(path: &Path) -> String {

@@ -104,6 +104,57 @@ fn init_sets_up_the_store_and_both_hooks() {
 }
 
 #[test]
+fn init_moves_its_own_hooks_to_the_binary_running_it() {
+    let directory = repo("repoint");
+    // An earlier init's hooks, naming a marrow that still exists but isn't this one.
+    let old = directory.join("old").join("marrow.exe");
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    std::fs::write(&old, "").unwrap();
+    let old = old.display().to_string().replace('\\', "/");
+    std::fs::create_dir_all(directory.join(".claude")).unwrap();
+    std::fs::write(
+        directory.join(".claude").join("settings.local.json"),
+        serde_json::json!({"hooks": {"PostToolUse": [
+            {"matcher": "Edit|Write",
+             "hooks": [{"type": "command", "command": format!("\"{old}\" record --hook")}]},
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo mine"}]}
+        ]}})
+        .to_string(),
+    )
+    .unwrap();
+    let hooks = directory.join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    std::fs::write(
+        hooks.join("post-commit"),
+        format!(
+            "#!/bin/sh\n# Installed by marrow. Records a commit-anchored checkpoint of every \
+             tracked line.\n\"{old}\" reconcile --repo \"$(git rev-parse --show-toplevel)\" || true\n"
+        ),
+    )
+    .unwrap();
+
+    let output = marrow(&directory, &["init", "--no-backfill"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let current = env!("CARGO_BIN_EXE_marrow").replace('\\', "/");
+    let settings = settings(&directory);
+    assert_eq!(marrow_hooks(&settings), 1, "{settings}");
+    assert_eq!(
+        settings["hooks"]["PostToolUse"][0]["hooks"][0]["command"],
+        format!("\"{current}\" record --hook")
+    );
+    assert_eq!(
+        settings["hooks"]["PostToolUse"][1]["hooks"][0]["command"], "echo mine",
+        "a hook a person wrote is left alone"
+    );
+    let post_commit = std::fs::read_to_string(hooks.join("post-commit")).unwrap();
+    assert!(post_commit.contains(&current), "{post_commit}");
+    assert!(stdout.contains("updated"), "{stdout}");
+    // The test binary is a cargo build, which is exactly what the note warns about.
+    assert!(stdout.contains("note  the hooks run"), "{stdout}");
+}
+
+#[test]
 fn running_init_twice_registers_the_hook_once() {
     let directory = repo("twice");
     assert!(marrow(&directory, &["init", "--no-backfill"])
