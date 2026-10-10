@@ -39,6 +39,9 @@ jobs:
       - name: test
         run: just test
 
+      - name: slow tests (skipped by default, like the parser-timeout test that waits ten seconds)
+        run: cargo test --manifest-path engine/Cargo.toml --workspace -- --ignored
+
   eval:
     name: eval (mutation corpus)
     runs-on: ubuntu-latest
