@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "fixture": "format-only/javascript",
+  "mutation_class": "format-only",
+  "language": "javascript",
+  "summary": "prettier applied to hand-spaced code: brace and operator spacing, indent width 4 to 2, a triple blank line collapsed. No line splits, joins, quote or semicolon changes.",
+  "commits": [
+    {"id": "c0", "sha": "c8b39c85f23e48866be58aaf321aad124ecd724a", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory parser"},
+    {"id": "c1", "sha": "9d115693ce34cdd1af5189ac4f8ee61a7f5b2e1a", "timestamp": "2026-01-02T00:00:00Z", "message": "run prettier"}
+  ],
+  "lines": [
+    {"line_id": "cm1", "kind": "comment", "text": "// Parsed inventory row.", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 1}]},
+    {"line_id": "p1", "kind": "code", "text": "export function parseItem(line){", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 2}]},
+    {"line_id": "p2", "kind": "code", "text": "    const parts=line.split(\",\");", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 3}]},
+    {"line_id": "p3", "kind": "code", "text": "    if(parts.length<2){", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 4}]},
+    {"line_id": "p4", "kind": "code", "text": "        return undefined;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 5}]},
+    {"line_id": "p5", "kind": "code", "text": "    }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 6}]},
+    {"line_id": "p6", "kind": "code", "text": "    return {name:parts[0].trim(),quantity:Number(parts[1])};", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 7}]},
+    {"line_id": "p7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 8}]},
+    {"line_id": "i1", "kind": "code", "text": "export function indexByName(items){", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 10}]},
+    {"line_id": "i2", "kind": "code", "text": "    const index=new Map();", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 11}]},
+    {"line_id": "i3", "kind": "code", "text": "    for(const item of items){", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 12}]},
+    {"line_id": "i4", "kind": "code", "text": "        index.set(item.name,item);", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 13}]},
+    {"line_id": "i5", "kind": "code", "text": "    }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 16}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 14}]},
+    {"line_id": "i6", "kind": "code", "text": "    return index;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 17}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 15}]},
+    {"line_id": "i7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 18}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 16}]}
+  ]
+}

@@ -41,6 +41,13 @@ pub struct HookPayload {
     pub file: Option<PathBuf>,
     /// `Write` replaces a whole file; `Edit` and friends change part of one.
     pub tool: Option<String>,
+    /// `PreToolUse` or `PostToolUse`.
+    pub event: Option<String>,
+    pub cwd: Option<PathBuf>,
+    /// The shell command, for a Bash tool call.
+    pub command: Option<String>,
+    /// Tells apart tool calls running side by side.
+    pub tool_use_id: Option<String>,
 }
 
 pub fn read_hook_payload() -> Result<HookPayload, String> {
@@ -56,6 +63,10 @@ pub fn read_hook_payload() -> Result<HookPayload, String> {
             .as_str()
             .map(PathBuf::from),
         tool: payload["tool_name"].as_str().map(str::to_owned),
+        event: payload["hook_event_name"].as_str().map(str::to_owned),
+        cwd: payload["cwd"].as_str().map(PathBuf::from),
+        command: payload["tool_input"]["command"].as_str().map(str::to_owned),
+        tool_use_id: payload["tool_use_id"].as_str().map(str::to_owned),
     })
 }
 

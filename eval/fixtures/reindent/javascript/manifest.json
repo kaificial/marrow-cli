@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "fixture": "reindent/javascript",
+  "mutation_class": "reindent",
+  "language": "javascript",
+  "summary": "Wrap a for loop and the statement after it in `if (items.length > 0) { ... }`. The 4 wrapped lines are verbatim one indent level deeper; the `if` line and its closing brace are born. A verbatim statement separates the loop's `}` from the new `}`, so which brace is new is unambiguous.",
+  "commits": [
+    {"id": "c0", "sha": "566347fe8fb8b0cafe2dab924c69a0881bf3cfa2", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory index"},
+    {"id": "c1", "sha": "78b0ff49f2c398b3e8ce177ef6b657ed78b693dd", "timestamp": "2026-01-02T00:00:00Z", "message": "skip indexing log for empty input"}
+  ],
+  "lines": [
+    {"line_id": "i1", "kind": "code", "text": "export function indexByName(items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 1}]},
+    {"line_id": "i2", "kind": "code", "text": "  const index = new Map();", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 2}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 2}]},
+    {"line_id": "i3", "kind": "code", "text": "  for (const item of items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 4}]},
+    {"line_id": "i4", "kind": "code", "text": "    index.set(item.name, item);", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 5}]},
+    {"line_id": "i5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 6}]},
+    {"line_id": "i6", "kind": "code", "text": "  console.log(`indexed ${index.size} items`);", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 7}]},
+    {"line_id": "i7", "kind": "code", "text": "  return index;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 9}]},
+    {"line_id": "i8", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 10}]},
+    {"line_id": "r1", "kind": "code", "text": "export function restock(items, amount) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 12}]},
+    {"line_id": "r2", "kind": "code", "text": "  for (const item of items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 13}]},
+    {"line_id": "r3", "kind": "code", "text": "    item.quantity += amount;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 14}]},
+    {"line_id": "r4", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 15}]},
+    {"line_id": "r5", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 16}]},
+    {"line_id": "w1", "kind": "code", "text": "  if (items.length > 0) {", "birth": {"commit": "c1", "path": "src/inventory.js", "line": 3}, "fates": []},
+    {"line_id": "w2", "kind": "code", "text": "  }", "birth": {"commit": "c1", "path": "src/inventory.js", "line": 8}, "fates": []}
+  ]
+}

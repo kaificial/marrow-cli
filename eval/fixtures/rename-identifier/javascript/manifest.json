@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "fixture": "rename-identifier/javascript",
+  "mutation_class": "rename-identifier",
+  "language": "javascript",
+  "summary": "Rename function parseItem to parseRecord (definition, a reference inside the module, and the import and call in main.js) and local variable parts to fields. Every line containing a renamed identifier is edited in place; all other lines are verbatim.",
+  "commits": [
+    {"id": "c0", "sha": "aa8e7aa658ba5fe6f5549f173e69fe35d9a27c85", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory parser"},
+    {"id": "c1", "sha": "4bed24e7165c0a7a366fa16e299907497f4af6e9", "timestamp": "2026-01-02T00:00:00Z", "message": "rename parseItem to parseRecord"}
+  ],
+  "lines": [
+    {"line_id": "d1", "kind": "comment", "text": "// Parses one \"name,quantity\" CSV row.", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 1}]},
+    {"line_id": "p1", "kind": "code", "text": "export function parseItem(line) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 2}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.js", "line": 2}]},
+    {"line_id": "p2", "kind": "code", "text": "  const parts = line.split(\",\");", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 3}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.js", "line": 3}]},
+    {"line_id": "p3", "kind": "code", "text": "  if (parts.length < 2) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 4}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.js", "line": 4}]},
+    {"line_id": "p4", "kind": "code", "text": "    return undefined;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 5}]},
+    {"line_id": "p5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 6}]},
+    {"line_id": "p6", "kind": "code", "text": "  return { name: parts[0].trim(), quantity: Number(parts[1]) };", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 7}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.js", "line": 7}]},
+    {"line_id": "p7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 8}]},
+    {"line_id": "a1", "kind": "code", "text": "export function parseAll(text) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 10}]},
+    {"line_id": "a2", "kind": "code", "text": "  return text", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 11}]},
+    {"line_id": "a3", "kind": "code", "text": "    .split(\"\\n\")", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 12}]},
+    {"line_id": "a4", "kind": "code", "text": "    .map(parseItem)", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 13}, "fates": [{"commit": "c1", "state": "edited", "path": "src/inventory.js", "line": 13}]},
+    {"line_id": "a5", "kind": "code", "text": "    .filter((item) => item !== undefined);", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 14}]},
+    {"line_id": "a6", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 15}]},
+    {"line_id": "i1", "kind": "code", "text": "export function indexByName(items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 17}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 17}]},
+    {"line_id": "i2", "kind": "code", "text": "  return new Map(items.map((item) => [item.name, item]));", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 18}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 18}]},
+    {"line_id": "i3", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 19}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 19}]},
+    {"line_id": "m1", "kind": "code", "text": "import { parseItem } from \"./inventory.js\";", "birth": {"commit": "c0", "path": "src/main.js", "line": 1}, "fates": [{"commit": "c1", "state": "edited", "path": "src/main.js", "line": 1}]},
+    {"line_id": "m2", "kind": "code", "text": "const line = process.argv[2] ?? \"\";", "birth": {"commit": "c0", "path": "src/main.js", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 3}]},
+    {"line_id": "m3", "kind": "code", "text": "const item = parseItem(line);", "birth": {"commit": "c0", "path": "src/main.js", "line": 4}, "fates": [{"commit": "c1", "state": "edited", "path": "src/main.js", "line": 4}]},
+    {"line_id": "m4", "kind": "code", "text": "if (item === undefined) {", "birth": {"commit": "c0", "path": "src/main.js", "line": 5}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 5}]},
+    {"line_id": "m5", "kind": "code", "text": "  console.error(`could not parse: ${line}`);", "birth": {"commit": "c0", "path": "src/main.js", "line": 6}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 6}]},
+    {"line_id": "m6", "kind": "code", "text": "} else {", "birth": {"commit": "c0", "path": "src/main.js", "line": 7}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 7}]},
+    {"line_id": "m7", "kind": "code", "text": "  console.log(`${item.name} x${item.quantity}`);", "birth": {"commit": "c0", "path": "src/main.js", "line": 8}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 8}]},
+    {"line_id": "m8", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/main.js", "line": 9}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 9}]}
+  ]
+}

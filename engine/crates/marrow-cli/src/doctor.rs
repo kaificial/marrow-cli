@@ -1,6 +1,7 @@
 //! `marrow doctor`: is marrow actually watching this repository, and can this build of it be
-//! trusted (PRD §7.1)? Four checks: the Claude Code write hook, the post-commit hook, how much of
-//! the history the store holds, and the mutation-corpus result for this exact build.
+//! trusted (PRD §7.1)? Five checks: the Claude Code write hook, the hooks around Bash commands,
+//! the git hooks, how much of the history the store holds, and the mutation-corpus result for
+//! this exact build.
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -66,6 +67,8 @@ pub fn doctor() -> Result<Checkup, String> {
 
     let (verdict, detail) = write_hook(&root);
     report.check(verdict, "write hook", &detail);
+    let (verdict, detail) = bash_hook(&root);
+    report.check(verdict, "bash hook", &detail);
     let (verdict, detail) = commit_hook(&root);
     report.check(verdict, "commit hook", &detail);
 
@@ -101,13 +104,7 @@ pub fn doctor() -> Result<Checkup, String> {
 /// The hook counts if a `PostToolUse` entry whose matcher covers both Edit and Write runs a
 /// command that mentions marrow.
 pub(crate) fn write_hook(root: &Path) -> (Verdict, String) {
-    let mut places = vec![
-        root.join(".claude").join("settings.json"),
-        root.join(".claude").join("settings.local.json"),
-    ];
-    if let Some(home) = home_directory() {
-        places.push(home.join(".claude").join("settings.json"));
-    }
+    let places = settings_places(root);
     let mut partial = None;
     let mut stale = None;
     for place in &places {
@@ -119,7 +116,16 @@ pub(crate) fn write_hook(root: &Path) -> (Verdict, String) {
         };
         match registered(&settings) {
             Coverage::Full => match missing_binary(&settings) {
-                None => return (Verdict::Ok, format!("registered in {}", shown(root, place))),
+                None => {
+                    let built = marrow_binaries(&settings)
+                        .into_iter()
+                        .find(|binary| in_build_directory(Path::new(binary)));
+                    let note = built.map(|binary| build_note(&binary)).unwrap_or_default();
+                    return (
+                        Verdict::Ok,
+                        format!("registered in {}{note}", shown(root, place)),
+                    );
+                }
                 Some(binary) => stale = Some((place, binary)),
             },
             Coverage::Partial => partial = Some(place),
@@ -161,15 +167,25 @@ enum Coverage {
 }
 
 fn registered(settings: &Value) -> Coverage {
+    match (
+        runs_marrow_on(settings, "PostToolUse", "Edit"),
+        runs_marrow_on(settings, "PostToolUse", "Write"),
+    ) {
+        (true, true) => Coverage::Full,
+        (false, false) => Coverage::None,
+        _ => Coverage::Partial,
+    }
+}
+
+/// Whether a hook for `event` whose matcher covers `tool` runs marrow.
+pub(crate) fn runs_marrow_on(settings: &Value, event: &str, tool: &str) -> bool {
     let Some(entries) = settings
-        .pointer("/hooks/PostToolUse")
+        .pointer(&format!("/hooks/{event}"))
         .and_then(Value::as_array)
     else {
-        return Coverage::None;
+        return false;
     };
-    let mut edit = false;
-    let mut write = false;
-    for entry in entries {
+    entries.iter().any(|entry| {
         let runs_marrow = entry
             .get("hooks")
             .and_then(Value::as_array)
@@ -180,32 +196,118 @@ fn registered(settings: &Value) -> Coverage {
                         .is_some_and(|command| command.contains("marrow"))
                 })
             });
-        if !runs_marrow {
-            continue;
-        }
         let matcher = entry.get("matcher").and_then(Value::as_str).unwrap_or("");
-        edit |= covers(matcher, "Edit");
-        write |= covers(matcher, "Write");
+        runs_marrow && covers(matcher, tool)
+    })
+}
+
+/// Agent edits made through the Bash tool need a hook before the command and one after it.
+pub(crate) fn bash_hook(root: &Path) -> (Verdict, String) {
+    let mut before = None;
+    let mut after = None;
+    for place in settings_places(root) {
+        let Some(settings) = std::fs::read_to_string(&place)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        else {
+            continue;
+        };
+        if before.is_none() && runs_marrow_on(&settings, "PreToolUse", "Bash") {
+            before = Some(place.clone());
+        }
+        if after.is_none() && runs_marrow_on(&settings, "PostToolUse", "Bash") {
+            after = Some(place);
+        }
     }
-    match (edit, write) {
-        (true, true) => Coverage::Full,
-        (false, false) => Coverage::None,
-        _ => Coverage::Partial,
+    match (before, after) {
+        (Some(place), Some(_)) => (
+            Verdict::Ok,
+            format!("registered in {}", shown(root, &place)),
+        ),
+        _ => (
+            Verdict::Warn,
+            "marrow doesn't run before and after Bash commands, so agent edits made through\n\
+             the shell are credited to people. Run: marrow init"
+                .to_owned(),
+        ),
     }
+}
+
+/// Where Claude Code reads hooks from: the project's shared and personal settings, and the
+/// user's own.
+fn settings_places(root: &Path) -> Vec<PathBuf> {
+    let mut places = vec![
+        root.join(".claude").join("settings.json"),
+        root.join(".claude").join("settings.local.json"),
+    ];
+    if let Some(home) = home_directory() {
+        places.push(home.join(".claude").join("settings.json"));
+    }
+    places
 }
 
 /// A hook `marrow init` wrote names the binary by its full path, in quotes. If that file is gone
 /// (the binary was moved, or rebuilt elsewhere) the hook fails on every write. Commands that
 /// find marrow some other way, through `PATH` or a script, aren't checked.
 fn missing_binary(settings: &Value) -> Option<String> {
-    let entries = settings.pointer("/hooks/PostToolUse")?.as_array()?;
+    marrow_binaries(settings)
+        .into_iter()
+        .find(|binary| !Path::new(binary).exists())
+}
+
+/// Every marrow binary a PostToolUse hook names by its path.
+fn marrow_binaries(settings: &Value) -> Vec<String> {
+    let Some(entries) = settings
+        .pointer("/hooks/PostToolUse")
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
     entries
         .iter()
         .filter_map(|entry| entry.get("hooks")?.as_array())
         .flatten()
         .filter_map(|hook| hook.get("command")?.as_str())
         .filter_map(quoted_marrow_binary)
-        .find(|binary| !Path::new(binary).exists())
+        .collect()
+}
+
+/// Whether a binary lives in a cargo build directory, which `cargo clean` deletes.
+pub(crate) fn in_build_directory(path: &Path) -> bool {
+    let parts: Vec<String> = path
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().to_lowercase())
+        .collect();
+    parts
+        .windows(2)
+        .any(|pair| pair[0] == "target" && (pair[1] == "debug" || pair[1] == "release"))
+}
+
+/// The hook works, but only until the build directory it points into is cleaned.
+fn build_note(binary: &str) -> String {
+    format!(
+        "\nit runs {binary},\na build that cargo clean deletes. For a lasting hook, install marrow:\n{}\n\
+         then run marrow init again with the installed one",
+        install_command(Path::new(binary))
+    )
+}
+
+/// The command that installs marrow from the source a build came from, ready to paste from any
+/// folder. `--locked` keeps the dependency versions the project was tested with.
+pub(crate) fn install_command(binary: &Path) -> String {
+    let source = binary
+        .ancestors()
+        .nth(3)
+        .map(|engine| engine.join("crates").join("marrow-cli"))
+        .filter(|source| source.join("Cargo.toml").exists());
+    match source {
+        Some(source) => {
+            let path = source.display().to_string().replace('\\', "/");
+            let path = path.strip_prefix("//?/").unwrap_or(&path).to_owned();
+            format!("cargo install --locked --path \"{path}\"")
+        }
+        None => "cargo install --locked --path <marrow>/engine/crates/marrow-cli".to_owned(),
+    }
 }
 
 /// The quoted path at the start of `command`, when it names a marrow binary outright.
@@ -228,18 +330,44 @@ fn covers(matcher: &str, tool: &str) -> bool {
 }
 
 fn commit_hook(root: &Path) -> (Verdict, String) {
-    let hook = root.join(".git").join("hooks").join("post-commit");
-    match std::fs::read_to_string(&hook) {
-        Ok(script) if script.contains("marrow") && script.contains("reconcile") => {
-            (Verdict::Ok, "post-commit runs marrow reconcile".to_owned())
+    let hooks = root.join(".git").join("hooks");
+    let runs = |name: &str| match std::fs::read_to_string(hooks.join(name)) {
+        Ok(script) if script.contains("marrow") && script.contains("reconcile") => Some(true),
+        Ok(_) => Some(false),
+        Err(_) => None,
+    };
+    match (runs("post-commit"), runs("post-merge")) {
+        (Some(true), Some(true)) => {
+            let built = std::fs::read_to_string(hooks.join("post-commit"))
+                .unwrap_or_default()
+                .lines()
+                .filter_map(quoted_marrow_binary)
+                .find(|binary| in_build_directory(Path::new(binary)));
+            let note = built.map(|binary| build_note(&binary)).unwrap_or_default();
+            (
+                Verdict::Ok,
+                format!("post-commit and post-merge run marrow reconcile{note}"),
+            )
         }
-        Ok(_) => (
+        (Some(true), Some(false)) => (
+            Verdict::Warn,
+            "a post-merge hook exists but doesn't run marrow reconcile, so merges and pulls\n\
+             aren't checkpointed until the next commit. Add a line running marrow reconcile to it"
+                .to_owned(),
+        ),
+        (Some(true), None) => (
+            Verdict::Warn,
+            "no post-merge hook, so merges and pulls aren't checkpointed until the next commit.\n\
+             Run: marrow init"
+                .to_owned(),
+        ),
+        (Some(false), _) => (
             Verdict::Warn,
             "a post-commit hook exists but doesn't run marrow reconcile, so commits aren't\n\
              checkpointed. Add a line running marrow reconcile to it"
                 .to_owned(),
         ),
-        Err(_) => (
+        (None, _) => (
             Verdict::Warn,
             "no post-commit hook, so commits aren't checkpointed. Run: marrow init".to_owned(),
         ),
@@ -377,6 +505,33 @@ fn shown(root: &Path, path: &Path) -> String {
         .display()
         .to_string()
         .replace('\\', "/")
+}
+
+#[cfg(test)]
+mod build_directory_tests {
+    use std::path::Path;
+
+    use super::in_build_directory;
+
+    #[test]
+    fn a_cargo_build_is_told_apart_from_an_installed_binary() {
+        assert!(in_build_directory(Path::new(
+            "C:/src/marrow/engine/target/release/marrow.exe"
+        )));
+        assert!(in_build_directory(Path::new(
+            "/home/me/marrow/target/debug/marrow"
+        )));
+        assert!(!in_build_directory(Path::new("/home/me/.cargo/bin/marrow")));
+        assert!(!in_build_directory(Path::new("/opt/target/marrow")));
+    }
+
+    #[test]
+    fn without_the_source_beside_it_the_install_command_names_a_placeholder() {
+        assert_eq!(
+            super::install_command(Path::new("/nowhere/engine/target/release/marrow")),
+            "cargo install --locked --path <marrow>/engine/crates/marrow-cli"
+        );
+    }
 }
 
 #[cfg(test)]

@@ -13,6 +13,15 @@
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_write_rust.py\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/marrow_record.py\""
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -22,6 +31,10 @@
           {
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_commit_on_main.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/marrow_record.py\""
           }
         ]
       },

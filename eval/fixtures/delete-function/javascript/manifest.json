@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "fixture": "delete-function/javascript",
+  "mutation_class": "delete-function",
+  "language": "javascript",
+  "summary": "Delete function totalValue and its comment (8 lines die). Nothing else changes. The surviving totalQuantity is identical except for its comment, signature, and accumulator line, so 5 of its lines duplicate deleted ones and shift up into their old line numbers; main.js is untouched.",
+  "commits": [
+    {"id": "c0", "sha": "7d4fd8bc2daf7c75ba6a0460fbd216d28a014d21", "timestamp": "2026-01-01T00:00:00Z", "message": "add inventory totals"},
+    {"id": "c1", "sha": "6af8cf48d32692b944be596f3eae05bda5a4b2ac", "timestamp": "2026-01-02T00:00:00Z", "message": "remove unused totalValue"}
+  ],
+  "lines": [
+    {"line_id": "t0", "kind": "comment", "text": "// Sum of quantity times unit price across all items.", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 1}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "t1", "kind": "code", "text": "export function totalValue(items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 2}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "t2", "kind": "code", "text": "  let total = 0;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 3}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "t3", "kind": "code", "text": "  for (const item of items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 4}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "t4", "kind": "code", "text": "    total += item.quantity * item.priceCents;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 5}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "t5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 6}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "t6", "kind": "code", "text": "  return total;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 7}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "t7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 8}, "fates": [{"commit": "c1", "state": "dead"}]},
+    {"line_id": "q0", "kind": "comment", "text": "// Total units in stock across all items.", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 10}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 1}]},
+    {"line_id": "q1", "kind": "code", "text": "export function totalQuantity(items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 11}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 2}]},
+    {"line_id": "q2", "kind": "code", "text": "  let total = 0;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 12}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 3}]},
+    {"line_id": "q3", "kind": "code", "text": "  for (const item of items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 13}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 4}]},
+    {"line_id": "q4", "kind": "code", "text": "    total += item.quantity;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 14}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 5}]},
+    {"line_id": "q5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 15}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 6}]},
+    {"line_id": "q6", "kind": "code", "text": "  return total;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 16}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 7}]},
+    {"line_id": "q7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 17}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 8}]},
+    {"line_id": "i1", "kind": "code", "text": "export function indexByName(items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 19}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 10}]},
+    {"line_id": "i2", "kind": "code", "text": "  const index = new Map();", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 20}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 11}]},
+    {"line_id": "i3", "kind": "code", "text": "  for (const item of items) {", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 21}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 12}]},
+    {"line_id": "i4", "kind": "code", "text": "    index.set(item.name, item);", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 22}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 13}]},
+    {"line_id": "i5", "kind": "code", "text": "  }", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 23}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 14}]},
+    {"line_id": "i6", "kind": "code", "text": "  return index;", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 24}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 15}]},
+    {"line_id": "i7", "kind": "code", "text": "}", "birth": {"commit": "c0", "path": "src/inventory.js", "line": 25}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/inventory.js", "line": 16}]},
+    {"line_id": "m1", "kind": "code", "text": "import { indexByName, totalQuantity } from \"./inventory.js\";", "birth": {"commit": "c0", "path": "src/main.js", "line": 1}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 1}]},
+    {"line_id": "m2", "kind": "code", "text": "const items = [{ name: \"widget\", quantity: 3, priceCents: 250 }];", "birth": {"commit": "c0", "path": "src/main.js", "line": 3}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 3}]},
+    {"line_id": "m3", "kind": "code", "text": "console.log(totalQuantity(items), indexByName(items).size);", "birth": {"commit": "c0", "path": "src/main.js", "line": 4}, "fates": [{"commit": "c1", "state": "verbatim", "path": "src/main.js", "line": 4}]}
+  ]
+}

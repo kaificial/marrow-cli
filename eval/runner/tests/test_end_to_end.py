@@ -29,7 +29,7 @@ class EndToEndTest(unittest.TestCase):
     def test_gate_passes_a_perfect_engine(self):
         code, output = invoke("--", *ORACLE)
         self.assertEqual(code, run.EXIT_PASS, output)
-        self.assertIn("PASS: all 27 fixtures within their thresholds", output)
+        self.assertIn("PASS: all 36 fixtures within their thresholds", output)
         self.assertNotIn("FAIL ", output)
 
     def test_gate_fails_the_stub_with_diagnostics(self):
@@ -43,7 +43,7 @@ class EndToEndTest(unittest.TestCase):
         )
         self.assertIn("`pub fn parse_item(line: &str) -> Option<Item> {`", output)
         self.assertIn("Confusion matrix", output)
-        self.assertRegex(output, r"FAIL: \d+ of 27 scored fixtures exceed their threshold")
+        self.assertRegex(output, r"FAIL: \d+ of 36 scored fixtures exceed their threshold")
 
     def test_stub_numbers_match_a_hand_derivation(self):
         # Exact-text matching keeps every unchanged line and kills the 7 lines containing a renamed identifier.

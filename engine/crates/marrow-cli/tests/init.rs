@@ -100,7 +100,59 @@ fn init_sets_up_the_store_and_both_hooks() {
 
     let doctor = String::from_utf8_lossy(&marrow(&directory, &["doctor"]).stdout).into_owned();
     assert!(doctor.contains("ok    write hook"), "{doctor}");
+    assert!(doctor.contains("ok    bash hook"), "{doctor}");
     assert!(doctor.contains("ok    commit hook"), "{doctor}");
+}
+
+#[test]
+fn init_moves_its_own_hooks_to_the_binary_running_it() {
+    let directory = repo("repoint");
+    // An earlier init's hooks, naming a marrow that still exists but isn't this one.
+    let old = directory.join("old").join("marrow.exe");
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    std::fs::write(&old, "").unwrap();
+    let old = old.display().to_string().replace('\\', "/");
+    std::fs::create_dir_all(directory.join(".claude")).unwrap();
+    std::fs::write(
+        directory.join(".claude").join("settings.local.json"),
+        serde_json::json!({"hooks": {"PostToolUse": [
+            {"matcher": "Edit|Write",
+             "hooks": [{"type": "command", "command": format!("\"{old}\" record --hook")}]},
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo mine"}]}
+        ]}})
+        .to_string(),
+    )
+    .unwrap();
+    let hooks = directory.join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    std::fs::write(
+        hooks.join("post-commit"),
+        format!(
+            "#!/bin/sh\n# Installed by marrow. Records a commit-anchored checkpoint of every \
+             tracked line.\n\"{old}\" reconcile --repo \"$(git rev-parse --show-toplevel)\" || true\n"
+        ),
+    )
+    .unwrap();
+
+    let output = marrow(&directory, &["init", "--no-backfill"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let current = env!("CARGO_BIN_EXE_marrow").replace('\\', "/");
+    let settings = settings(&directory);
+    assert_eq!(marrow_hooks(&settings), 1, "{settings}");
+    assert_eq!(
+        settings["hooks"]["PostToolUse"][0]["hooks"][0]["command"],
+        format!("\"{current}\" record --hook")
+    );
+    assert_eq!(
+        settings["hooks"]["PostToolUse"][1]["hooks"][0]["command"], "echo mine",
+        "a hook a person wrote is left alone"
+    );
+    let post_commit = std::fs::read_to_string(hooks.join("post-commit")).unwrap();
+    assert!(post_commit.contains(&current), "{post_commit}");
+    assert!(stdout.contains("updated"), "{stdout}");
+    // The test binary is a cargo build, which is exactly what the note warns about.
+    assert!(stdout.contains("note  the hooks run"), "{stdout}");
 }
 
 #[test]
@@ -195,4 +247,61 @@ fn a_hook_whose_binary_has_moved_is_reported_and_replaced() {
     assert!(!settings.to_string().contains("no/such/place"));
     let doctor = String::from_utf8_lossy(&marrow(&directory, &["doctor"]).stdout).into_owned();
     assert!(doctor.contains("ok    write hook"), "{doctor}");
+}
+
+#[test]
+fn uninstall_takes_out_what_init_put_in_and_nothing_else() {
+    let directory = repo("uninstall");
+    assert!(marrow(&directory, &["init", "--no-backfill"])
+        .status
+        .success());
+    // A hook of the person's own, in the same file.
+    let path = directory.join(".claude").join("settings.local.json");
+    let mut settings = settings(&directory);
+    settings["hooks"]["Stop"] = serde_json::json!([
+        {"hooks": [{"type": "command", "command": "echo done"}]}
+    ]);
+    std::fs::write(&path, settings.to_string()).unwrap();
+
+    let output = marrow(&directory, &["uninstall"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let left = self::settings(&directory);
+    assert!(!left.to_string().contains("record --hook"), "{left}");
+    assert_eq!(left["hooks"]["Stop"][0]["hooks"][0]["command"], "echo done");
+    let hooks = directory.join(".git").join("hooks");
+    assert!(!hooks.join("post-commit").exists());
+    assert!(!hooks.join("post-merge").exists());
+    assert!(
+        directory.join(".marrow").join("db.sqlite").exists(),
+        "the data stays unless asked"
+    );
+
+    assert!(marrow(&directory, &["uninstall", "--purge"])
+        .status
+        .success());
+    assert!(!directory.join(".marrow").exists());
+}
+
+#[test]
+fn uninstall_leaves_a_persons_own_git_hook_alone() {
+    let directory = repo("uninstall-mine");
+    let hooks = directory.join(".git").join("hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    let mine = "#!/bin/sh\nmake lint\nmarrow reconcile\n";
+    std::fs::write(hooks.join("post-commit"), mine).unwrap();
+    let output = marrow(&directory, &["uninstall"]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "something is left to do by hand"
+    );
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Remove that line by hand"));
+    assert_eq!(
+        std::fs::read_to_string(hooks.join("post-commit")).unwrap(),
+        mine
+    );
 }

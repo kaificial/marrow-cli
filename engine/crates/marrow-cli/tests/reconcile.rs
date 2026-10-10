@@ -595,6 +595,11 @@ fn install_writes_the_hook_and_leaves_an_existing_one_alone() {
     let script = std::fs::read_to_string(&hook).expect("the hook is written");
     assert!(script.contains("reconcile --repo"), "{script}");
     assert!(script.starts_with("#!/bin/sh"), "{script}");
+    let merge_hook = directory.join(".git").join("hooks").join("post-merge");
+    assert_eq!(
+        std::fs::read_to_string(&merge_hook).expect("post-merge is written too"),
+        script
+    );
 
     let again = marrow(&["reconcile", "--install"], &directory);
     assert!(String::from_utf8_lossy(&again.stdout).contains("already runs marrow"));
@@ -625,6 +630,107 @@ fn the_installed_hook_runs_on_a_real_commit() {
         .lines
         .iter()
         .all(|line| line.origin == "human" && line.birth_commit.as_deref() == Some(sha.as_str())));
+}
+
+#[test]
+fn a_merge_is_reconciled_by_the_post_merge_hook() {
+    let directory = repo("merged");
+    assert!(marrow(&["reconcile", "--install"], &directory)
+        .status
+        .success());
+    write(&directory, "inventory.py", HELPER);
+    hand_commit(&directory, "a person's helper");
+    let start = git(&directory, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    git(&directory, &["checkout", "-q", "-b", "side"]);
+    write(&directory, "caller.py", CALLER);
+    hand_commit(&directory, "work on a branch");
+    git(&directory, &["checkout", "-q", &start]);
+    write(&directory, "other.py", "def other(x):\n    return x + 1\n");
+    hand_commit(&directory, "work on main");
+    git(
+        &directory,
+        &["merge", "-q", "--no-ff", "-m", "merge the branch", "side"],
+    );
+    let merge = git(&directory, &["rev-parse", "HEAD"]);
+    let stored = stored(&directory);
+    assert!(
+        stored.commits.contains(&(merge, 1)),
+        "git runs post-merge, not post-commit, for a merge: {:?}",
+        stored.commits
+    );
+}
+
+#[test]
+fn a_line_a_branch_switch_hid_keeps_its_identity_when_it_returns() {
+    let directory = repo("returns");
+    write(&directory, "inventory.py", HELPER);
+    hand_commit(&directory, "a person's helper");
+    let start = git(&directory, &["rev-parse", "--abbrev-ref", "HEAD"]);
+    reconciled(&directory);
+    write(&directory, "inventory.py", &format!("{HELPER}{CALLER}"));
+    let added = hand_commit(&directory, "a caller");
+    reconciled(&directory);
+    // An older branch, where the caller doesn't exist yet, and a commit there that doesn't touch
+    // inventory.py: marrow takes the older version as it finds it.
+    git(&directory, &["checkout", "-q", "-b", "older", "HEAD~1"]);
+    write(&directory, "other.py", "def other(x):\n    return x + 1\n");
+    hand_commit(&directory, "work on the older branch");
+    assert!(marrow(&["reconcile"], &directory).status.success());
+    // Back again, and another commit that leaves inventory.py alone.
+    git(&directory, &["checkout", "-q", &start]);
+    write(&directory, "more.py", "def more(y):\n    return y * 3\n");
+    hand_commit(&directory, "more work");
+    let output = marrow(&["reconcile"], &directory);
+    let said = String::from_utf8_lossy(&output.stdout);
+    assert!(said.contains("2 back from another branch"), "{said}");
+
+    let stored = stored(&directory);
+    let callers = stored
+        .lines
+        .iter()
+        .filter(|line| line.birth_commit.as_deref() == Some(added.as_str()))
+        .count();
+    assert_eq!(
+        callers, 2,
+        "the caller's two lines keep the commit they were born in"
+    );
+    assert_eq!(stored.lines.len(), 4 + 2 + 2 + 2, "no line is born twice");
+}
+
+#[test]
+fn a_commit_moved_off_the_branch_by_a_reset_kills_nothing() {
+    let directory = repo("reset");
+    write(&directory, "inventory.py", HELPER);
+    hand_commit(&directory, "a person's helper");
+    reconciled(&directory);
+    write(&directory, "inventory.py", &format!("{HELPER}{CALLER}"));
+    hand_commit(&directory, "a caller that belongs on its own branch");
+    reconciled(&directory);
+    // The usual way to move a commit to a branch: name it, then take the current branch back.
+    git(&directory, &["branch", "caller"]);
+    git(&directory, &["reset", "-q", "--hard", "HEAD~1"]);
+    write(
+        &directory,
+        "inventory.py",
+        &format!("{HELPER}\ndef other(x):\n    return x + 1\n"),
+    );
+    hand_commit(&directory, "carry on without it");
+    let output = marrow(&["reconcile"], &directory);
+    assert!(output.status.success());
+    let said = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        said.contains("2 last seen on commits history no longer holds"),
+        "{said}"
+    );
+    let deaths = stored(&directory)
+        .fates
+        .iter()
+        .filter(|(state, ..)| state == "dead")
+        .count();
+    assert_eq!(
+        deaths, 0,
+        "the caller lives on its branch; nothing killed it"
+    );
 }
 
 #[test]

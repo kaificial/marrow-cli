@@ -347,13 +347,17 @@ fn canonical_leaf(language: Language, node: Node<'_>, text: &str) -> Canonical {
         Language::Python if matches!(node.kind(), "string_start" | "string_end") => {
             Canonical::Lowercase(text.to_ascii_lowercase().replace('\'', "\""))
         }
-        Language::TypeScript | Language::Tsx if !node.is_named() => match text {
-            "'" if parent_kind == "string" => Canonical::Text("\""),
-            ";" if !in_for_header(node) => Canonical::Dropped,
-            "," if matches!(parent_kind, "interface_body" | "object_type") => Canonical::Dropped,
-            "," => Canonical::Comma { tuple: false },
-            _ => Canonical::Same,
-        },
+        Language::TypeScript | Language::Tsx | Language::JavaScript if !node.is_named() => {
+            match text {
+                "'" if parent_kind == "string" => Canonical::Text("\""),
+                ";" if !in_for_header(node) => Canonical::Dropped,
+                "," if matches!(parent_kind, "interface_body" | "object_type") => {
+                    Canonical::Dropped
+                }
+                "," => Canonical::Comma { tuple: false },
+                _ => Canonical::Same,
+            }
+        }
         _ => Canonical::Same,
     }
 }
@@ -466,6 +470,31 @@ mod tests {
     const PYTHON: &str = "# comment\ndef f(x):\n    s = 'it\\'s'\n    d = \"\"\"doc\n    more\"\"\"\n    v = f\"a {x} b\"\n    return s  # trailing\n";
     const TYPESCRIPT: &str = "// c\ninterface I { a: string, b: number; }\nfor (let i = 0; i < n; i++) { f(i); }\nconst t = `a ${s} b`;\n/* block\n * more */\nlet u = [1, 2,];\n";
 
+    const JAVASCRIPT: &str = "// c\nconst s = 'it\\'s';\nfor (let i = 0; i < n; i++) { f(i); }\nconst t = `a ${s} b`;\nconst view = <div className=\"x\">{t}</div>;\nexport default s;\n";
+
+    #[test]
+    fn javascript_follows_the_typescript_rules() {
+        let same = |a: &str, b: &str| {
+            let a = normalize(a, Language::JavaScript);
+            let b = normalize(b, Language::JavaScript);
+            a.iter().map(|line| line.fingerprint).collect::<Vec<_>>()
+                == b.iter().map(|line| line.fingerprint).collect::<Vec<_>>()
+        };
+        assert!(
+            same("const a = 'x';\n", "const a = \"x\"\n"),
+            "quotes and semicolons"
+        );
+        assert!(same("f(a, b,);\n", "f(a, b)\n"), "a trailing comma");
+        assert!(
+            !same("const a = 'x';\n", "const a = `x`;\n"),
+            "a template literal is different"
+        );
+        assert!(
+            !same("for (;;) {}\n", "for () {}\n"),
+            "a for header keeps its semicolons"
+        );
+    }
+
     fn token_texts(source: &str, language: Language) -> Vec<(usize, String, bool)> {
         tokenize(source, language)
             .expect("parses")
@@ -481,6 +510,7 @@ mod tests {
             (RUST, Language::Rust),
             (PYTHON, Language::Python),
             (TYPESCRIPT, Language::TypeScript),
+            (JAVASCRIPT, Language::JavaScript),
             ("fn broken( {\n  let x = ;\n", Language::Rust),
         ] {
             let joined: String = token_texts(source, language)

@@ -247,3 +247,86 @@ fn2 = | }
 )
 
 FIXTURES = [RUST, PYTHON, TYPESCRIPT]
+
+JAVASCRIPT = Fixture(
+    mutation_class="duplicate-heavy",
+    language="javascript",
+    summary=(
+        "validate has six guard blocks with an identical `throw new Error(\"invalid item\");` line and an "
+        "identical closing `  }`; two of them also log with an identical `logRejection(item);`. Only the "
+        "third block is edited: a born `logRejection(item);` (identical to the two existing ones) is "
+        "inserted, and its throw message is edited in place. Every later line shifts down by one. A "
+        "matcher that pairs identical lines as a set, or by line number, mislabels the duplicates."
+    ),
+    commits=[
+        Commit(
+            message="add item validation",
+            files={
+                "src/validate.js": r"""
+l1  + | function logRejection(item) {
+l2  + |   console.error(`rejected ${item.name}`);
+l3  + | }
+      |
+fn1 + | export function validate(item) {
+ga1 + |   if (item.name === "") {
+ga2 + |     throw new Error("invalid item");
+ga3 + |   }
+gb1 + |   if (item.name.length > 64) {
+gb2 + |     logRejection(item);
+gb3 + |     throw new Error("invalid item");
+gb4 + |   }
+gc1 + |   if (item.quantity === 0) {
+gc2 + |     throw new Error("invalid item");
+gc3 + |   }
+gd1 + |   if (item.quantity > 10_000) {
+gd2 + |     throw new Error("invalid item");
+gd3 + |   }
+ge1 + |   if (item.priceCents === 0) {
+ge2 + |     logRejection(item);
+ge3 + |     throw new Error("invalid item");
+ge4 + |   }
+gf1 + |   if (item.priceCents > 1_000_000) {
+gf2 + |     throw new Error("invalid item");
+gf3 + |   }
+fn2 + | }
+""",
+            },
+        ),
+        Commit(
+            message="explain zero-quantity rejections",
+            files={
+                "src/validate.js": r"""
+l1  = | function logRejection(item) {
+l2  = |   console.error(`rejected ${item.name}`);
+l3  = | }
+      |
+fn1 = | export function validate(item) {
+ga1 = |   if (item.name === "") {
+ga2 = |     throw new Error("invalid item");
+ga3 = |   }
+gb1 = |   if (item.name.length > 64) {
+gb2 = |     logRejection(item);
+gb3 = |     throw new Error("invalid item");
+gb4 = |   }
+gc1 = |   if (item.quantity === 0) {
+n1  + |     logRejection(item);
+gc2 ~ |     throw new Error("quantity must be positive");
+gc3 = |   }
+gd1 = |   if (item.quantity > 10_000) {
+gd2 = |     throw new Error("invalid item");
+gd3 = |   }
+ge1 = |   if (item.priceCents === 0) {
+ge2 = |     logRejection(item);
+ge3 = |     throw new Error("invalid item");
+ge4 = |   }
+gf1 = |   if (item.priceCents > 1_000_000) {
+gf2 = |     throw new Error("invalid item");
+gf3 = |   }
+fn2 = | }
+""",
+            },
+        ),
+    ],
+)
+
+FIXTURES.append(JAVASCRIPT)

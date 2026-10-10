@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use marrow_core::align::bigram_dice;
+use marrow_core::constants::WEAK_ANCHOR_MAX_CONTENT_TOKENS;
 use marrow_core::history::{CommitInfo, Repository};
 use marrow_core::language::Language;
 use marrow_core::normalize::{normalize, Line, NORMALIZER_VERSION};
@@ -49,6 +50,10 @@ pub struct Report {
     pub anchored: usize,
     /// Agent-written lines a person has since changed.
     pub revised: usize,
+    /// Lines a checkout had taken out of sight that came back unchanged, with their identity.
+    pub restored: usize,
+    /// Lines last seen on commits that history no longer holds, censored rather than killed.
+    pub set_aside: usize,
     /// Files in HEAD that tree-sitter gave up on, whose lines were left untouched.
     pub unparsed: Vec<String>,
     /// Files whose contents changed without this commit changing them, so the committed version
@@ -278,11 +283,42 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
             ));
         }
     }
+    let mut kept_history = KeptHistory::new(&repository, &head);
     for death in &decisions.deaths {
         let line_id = line_id(&old_files, &death.old)?;
-        if rebaselined.contains(&death.old.path) {
+        // A line last seen on a commit HEAD's history no longer holds was on history that was
+        // reset, amended or rebased away. That isn't evidence it died: most often the commits
+        // just moved to another branch (ADR 0017). Like a line a checkout hid, it is censored at
+        // its last sighting and parked, not killed.
+        let discarded = match recording
+            .last_seen_commit(line_id)
+            .map_err(|error| format!("{error}"))?
+        {
+            Some(commit) => !kept_history.contains(&commit),
+            None => false,
+        };
+        if discarded {
+            report.set_aside += 1;
+        }
+        if discarded || rebaselined.contains(&death.old.path) {
             // Not in the baseline we just took, and not killed by any commit either. The line
-            // keeps the checkpoint it already had, which is what censoring it means.
+            // keeps the checkpoint it already had, which is what censoring it means, and its
+            // fingerprint is parked so that it gets its identity back if it returns.
+            if let Some(line) = old_side[&death.old.path]
+                .lines
+                .iter()
+                .find(|line| line.number == death.old.line)
+            {
+                recording
+                    .park_line(
+                        line_id,
+                        &path_hash(&death.old.path),
+                        line.number,
+                        line.fingerprint,
+                        observed_at,
+                    )
+                    .map_err(|error| format!("{error}"))?;
+            }
             continue;
         }
         fates.push((
@@ -298,18 +334,39 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
 
     // Anything in the commit that no stored line accounts for was written without the hook
     // seeing it, which means a person wrote it.
+    let mut taken: HashSet<i64> = identity.values().copied().collect();
     for (path, file) in &new_side {
         let hash = path_hash(path);
         // A line this commit put there was born in it. One in a file the commit didn't touch
         // was there already, from a branch or a history marrow never walked, at a time nobody
         // recorded.
         let born_here = births_observed && before.commit_touched(path, committed[path]);
+        let mut parked = recording
+            .parked_lines(&hash)
+            .map_err(|error| format!("{error}"))?;
         for line in file.lines.iter() {
             let position = Position {
                 path: path.clone(),
                 line: line.number,
             };
             if identity.contains_key(&position) {
+                continue;
+            }
+            // A line a checkout took out of sight, back exactly as it was: the same line, not a
+            // new one. Lines with too little content to tell apart are never matched this way.
+            let returning = (line.content_tokens > WEAK_ANCHOR_MAX_CONTENT_TOKENS)
+                .then(|| {
+                    parked.iter().position(|(line_id, fingerprint)| {
+                        *fingerprint == line.fingerprint && !taken.contains(line_id)
+                    })
+                })
+                .flatten();
+            if let Some(index) = returning {
+                let (line_id, _) = parked.remove(index);
+                taken.insert(line_id);
+                identity.insert(position, line_id);
+                alive.push(line_id);
+                report.restored += 1;
                 continue;
             }
             let line_id = recording
@@ -431,6 +488,9 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
                 .map_err(|error| format!("{error}"))?;
         }
     }
+    recording
+        .unpark_present()
+        .map_err(|error| format!("{error}"))?;
     // Last, because anchoring takes a line's committed version from the files' last known
     // states: after the commit's are written, and after any file it removed is forgotten, since
     // a line moved out of a renamed file is briefly in both.
@@ -439,6 +499,49 @@ pub fn reconcile(repo: Option<&Path>) -> Result<Outcome, String> {
         .map_err(|error| format!("{error}"))?;
     recording.commit().map_err(|error| format!("{error}"))?;
     Ok(Outcome::Reconciled(report))
+}
+
+/// The commits HEAD's history holds, every parent of every merge included. Most deaths are of
+/// lines last seen at HEAD's own parent, which is answered without walking anything; the walk
+/// happens only once history has been rewritten.
+struct KeptHistory<'a> {
+    repository: &'a Repository,
+    head: &'a CommitInfo,
+    ancestors: Option<HashSet<String>>,
+}
+
+impl<'a> KeptHistory<'a> {
+    fn new(repository: &'a Repository, head: &'a CommitInfo) -> KeptHistory<'a> {
+        KeptHistory {
+            repository,
+            head,
+            ancestors: None,
+        }
+    }
+
+    fn contains(&mut self, sha: &str) -> bool {
+        if sha == self.head.sha || self.head.parents.iter().any(|id| id.to_string() == sha) {
+            return true;
+        }
+        let repository = self.repository;
+        let head = self.head;
+        self.ancestors
+            .get_or_insert_with(|| {
+                let mut seen: HashSet<String> = HashSet::new();
+                let mut queue: Vec<_> = head.parents.clone();
+                while let Some(id) = queue.pop() {
+                    if !seen.insert(id.to_string()) {
+                        continue;
+                    }
+                    // A shallow clone stops where git's copy of the history does.
+                    if let Ok(commit) = repository.commit(id) {
+                        queue.extend(commit.parents);
+                    }
+                }
+                seen
+            })
+            .contains(sha)
+    }
 }
 
 enum FateKind {
@@ -542,6 +645,8 @@ impl Report {
             alive: 0,
             anchored: 0,
             revised: 0,
+            restored: 0,
+            set_aside: 0,
             unparsed: Vec::new(),
             rebaselined: Vec::new(),
         }
@@ -629,27 +734,60 @@ pub fn install(repo: Option<&Path>) -> Result<String, String> {
     let hooks = root.join(".git").join("hooks");
     std::fs::create_dir_all(&hooks)
         .map_err(|error| format!("can't create {}: {error}", hooks.display()))?;
-    let hook = hooks.join("post-commit");
-    if let Ok(current) = std::fs::read_to_string(&hook) {
-        if current.contains("marrow") {
-            return Ok(format!("{} already runs marrow", display(&hook)));
-        }
-        return Err(format!(
-            "{} already exists. Add this line to it:\n{command}",
-            display(&hook)
-        ));
-    }
+    let mut done = Vec::new();
+    let mut refused = Vec::new();
     let script = format!(
         "#!/bin/sh\n\
-         # Installed by marrow. Records a commit-anchored checkpoint of every tracked line.\n\
+         {INSTALLED}\n\
          # Its exit code is ignored by git, so a marrow problem can never fail a commit.\n\
          {command} || true\n"
     );
-    std::fs::write(&hook, script)
-        .map_err(|error| format!("can't write {}: {error}", display(&hook)))?;
-    make_executable(&hook);
-    Ok(format!("installed {}", display(&hook)))
+    for name in HOOKS {
+        let hook = hooks.join(name);
+        let verb = match std::fs::read_to_string(&hook) {
+            // A hook marrow wrote is marrow's to rewrite, so running init with another binary
+            // points it there. One a person wrote, or added marrow to, is left as it is.
+            Ok(current) if current == script => {
+                done.push(format!("{} already runs marrow", display(&hook)));
+                continue;
+            }
+            Ok(current) if current.contains(INSTALLED) => "updated",
+            Ok(current) if current.contains("marrow") => {
+                done.push(format!("{} already runs marrow", display(&hook)));
+                continue;
+            }
+            Ok(_) => {
+                refused.push(format!(
+                    "{} already exists. Add this line to it:\n{command}",
+                    display(&hook)
+                ));
+                continue;
+            }
+            Err(_) => "installed",
+        };
+        std::fs::write(&hook, &script)
+            .map_err(|error| format!("can't write {}: {error}", display(&hook)))?;
+        make_executable(&hook);
+        done.push(format!("{verb} {}", display(&hook)));
+    }
+    if refused.is_empty() {
+        Ok(done.join("; "))
+    } else {
+        Err(done
+            .into_iter()
+            .chain(refused)
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
 }
+
+/// The git hooks that reconcile. A merge or a pull makes a commit without running post-commit,
+/// so post-merge covers those.
+pub const HOOKS: [&str; 2] = ["post-commit", "post-merge"];
+
+/// The line that marks a git hook as one marrow wrote.
+pub const INSTALLED: &str =
+    "# Installed by marrow. Records a commit-anchored checkpoint of every tracked line.";
 
 /// Canonical paths on Windows carry a `\\?\` prefix, which is noise in a message.
 fn display(path: &Path) -> String {

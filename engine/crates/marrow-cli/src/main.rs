@@ -4,6 +4,7 @@ use std::process::ExitCode;
 
 mod audit;
 mod backfill;
+mod bash;
 mod capture;
 mod doctor;
 mod explain;
@@ -15,6 +16,7 @@ mod report;
 mod serve;
 mod status;
 mod survival;
+mod uninstall;
 
 use clap::{Parser, Subcommand};
 use marrow_core::Trace;
@@ -33,7 +35,7 @@ enum Command {
     /// Print the engine version.
     Version,
     /// Start watching the repository in the current directory: create .marrow/, register the
-    /// Claude Code write hook and the post-commit hook, and offer to record the history so far.
+    /// Claude Code write hook and the git hooks, and offer to record the history so far.
     Init {
         /// Record the existing history now, without asking.
         #[arg(long, conflicts_with = "no_backfill")]
@@ -102,6 +104,13 @@ enum Command {
     /// Check that marrow is watching this repository: its hooks, how much history it holds, and
     /// the mutation-corpus result for this build.
     Doctor,
+    /// Stop watching the repository in the current directory: take out the hooks init added.
+    /// What marrow recorded stays in .marrow/ unless --purge is given.
+    Uninstall {
+        /// Also delete .marrow/ and everything in it.
+        #[arg(long)]
+        purge: bool,
+    },
     /// Print everything marrow stores about this repository, so anyone can check it holds no
     /// source code.
     Export {
@@ -114,7 +123,8 @@ enum Command {
         /// Path to the local git repository. Defaults to the current directory.
         #[arg(long)]
         repo: Option<PathBuf>,
-        /// Write .git/hooks/post-commit so every commit is reconciled, and do nothing else.
+        /// Write the post-commit and post-merge hooks so every commit is reconciled, and do nothing
+        /// else.
         #[arg(long)]
         install: bool,
     },
@@ -201,6 +211,20 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some(Command::Uninstall { purge }) => match uninstall::uninstall(purge) {
+            Ok(removal) => {
+                print!("{}", removal.text);
+                if removal.complete {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                }
+            }
+            Err(message) => {
+                eprintln!("marrow uninstall: {message}");
+                ExitCode::FAILURE
+            }
+        },
         Some(Command::Export { audit }) => {
             if !audit {
                 eprintln!("marrow export: only --audit is supported");
@@ -233,8 +257,15 @@ fn record(
             session: None,
             file: None,
             tool: None,
+            event: None,
+            cwd: None,
+            command: None,
+            tool_use_id: None,
         }
     };
+    if hook && payload.tool.as_deref() == Some("Bash") {
+        return bash_hook(&payload);
+    }
     let (Some(session), Some(file)) = (session.or(payload.session), file.or(payload.file)) else {
         eprintln!(
             "marrow record: needs --session and --file, or --hook with Claude Code's payload on stdin"
@@ -268,6 +299,45 @@ fn record(
         Err(message) => {
             eprintln!("marrow record: {message}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+/// A Bash tool call: note the files before it runs, and record what it changed after. Like any
+/// write, it is never worth failing over.
+fn bash_hook(payload: &record::HookPayload) -> ExitCode {
+    let (Some(session), Some(cwd)) = (payload.session.as_deref(), payload.cwd.as_deref()) else {
+        eprintln!("marrow record: a Bash hook payload needs session_id and cwd");
+        return ExitCode::from(2);
+    };
+    let bash = bash::Payload {
+        session,
+        cwd,
+        key: payload.tool_use_id.as_deref().unwrap_or(session),
+        command: payload.command.as_deref().unwrap_or_default(),
+    };
+    let result = if payload.event.as_deref() == Some("PreToolUse") {
+        bash::before(&bash).map(|()| None)
+    } else {
+        bash::after(&bash)
+    };
+    match result {
+        Ok(Some(outcome)) if outcome.files > 0 => {
+            println!(
+                "marrow record: the command changed {} {}: {} {} born, {} {} changed",
+                outcome.files,
+                plural(outcome.files as i64, "file", "files"),
+                outcome.born,
+                plural(outcome.born as i64, "line", "lines"),
+                outcome.changed,
+                plural(outcome.changed as i64, "line", "lines")
+            );
+            ExitCode::SUCCESS
+        }
+        Ok(_) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("marrow record: {message}");
+            ExitCode::SUCCESS
         }
     }
 }
@@ -439,8 +509,23 @@ fn reconcile_command(repo: Option<&Path>, install: bool) -> ExitCode {
                      changing it, so no fates were recorded for it)"
                 );
             }
+            let mut notes = Vec::new();
+            if report.restored > 0 {
+                notes.push(format!("{} back from another branch", report.restored));
+            }
+            if report.set_aside > 0 {
+                notes.push(format!(
+                    "{} last seen on commits history no longer holds, set aside",
+                    report.set_aside
+                ));
+            }
+            let restored = if notes.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", notes.join("; "))
+            };
             println!(
-                "marrow reconcile: {} — {} born, {} edited, {} moved, {} dead, {} alive",
+                "marrow reconcile: {} — {} born, {} edited, {} moved, {} dead, {} alive{restored}",
                 reconcile::short(&report.commit),
                 report.born,
                 report.edited,
