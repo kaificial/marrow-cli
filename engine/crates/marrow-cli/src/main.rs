@@ -4,8 +4,13 @@ use std::process::ExitCode;
 
 mod backfill;
 mod capture;
+mod explain;
+mod paths;
 mod reconcile;
 mod record;
+mod report;
+mod status;
+mod survival;
 
 use clap::{Parser, Subcommand};
 use marrow_core::Trace;
@@ -45,6 +50,34 @@ enum Command {
         #[arg(long)]
         since: Option<String>,
     },
+    /// Show the full history of one line: where it was born, every change and why, and where
+    /// it is now.
+    Explain {
+        /// The line, as <file>:<line>, like src/main.rs:12.
+        target: String,
+    },
+    /// Survival curves for lines since their first commit, with confidence intervals.
+    Report {
+        /// What to compare.
+        #[arg(long, value_enum, default_value = "origin")]
+        by: report::By,
+        /// The rewritten death: similarity to the first committed version below which a line
+        /// counts as rewritten.
+        #[arg(long, default_value_t = 0.5)]
+        rewrite_threshold: f64,
+        /// Bootstrap resamples for the confidence intervals; 0 leaves them out.
+        #[arg(long, default_value_t = 200)]
+        resamples: usize,
+        /// Seed for the resampling, so a report can be reproduced exactly.
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+    },
+    /// What happened to the lines an agent session wrote, beside how lines here usually fare.
+    Status {
+        /// The session to show. Defaults to the most recent.
+        #[arg(long)]
+        session: Option<String>,
+    },
     /// Reconcile what marrow knows against HEAD, and checkpoint every line at that commit.
     Reconcile {
         /// Path to the local git repository. Defaults to the current directory.
@@ -79,6 +112,39 @@ fn main() -> ExitCode {
             hook,
         }) => record(session, file, model, hook),
         Some(Command::Backfill { since }) => backfill_command(since.as_deref()),
+        Some(Command::Report {
+            by,
+            rewrite_threshold,
+            resamples,
+            seed,
+        }) => {
+            if !(rewrite_threshold > 0.0 && rewrite_threshold < 1.0) {
+                eprintln!("marrow report: --rewrite-threshold must be between 0 and 1");
+                return ExitCode::from(2);
+            }
+            print_or_fail(
+                "report",
+                report::report(&report::Options {
+                    by,
+                    threshold: rewrite_threshold,
+                    resamples,
+                    seed,
+                }),
+            )
+        }
+        Some(Command::Status { session }) => {
+            print_or_fail("status", status::status(session.as_deref()))
+        }
+        Some(Command::Explain { target }) => match explain::explain(&target) {
+            Ok(text) => {
+                print!("{text}");
+                ExitCode::SUCCESS
+            }
+            Err(message) => {
+                eprintln!("marrow explain: {message}");
+                ExitCode::FAILURE
+            }
+        },
         Some(Command::Reconcile { repo, install }) => reconcile_command(repo.as_deref(), install),
     }
 }
@@ -212,6 +278,19 @@ fn backfill_command(since: Option<&str>) -> ExitCode {
         }
         Err(message) => {
             eprintln!("marrow backfill: {message}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn print_or_fail(command: &str, result: Result<String, String>) -> ExitCode {
+    match result {
+        Ok(text) => {
+            print!("{text}");
+            ExitCode::SUCCESS
+        }
+        Err(message) => {
+            eprintln!("marrow {command}: {message}");
             ExitCode::FAILURE
         }
     }
