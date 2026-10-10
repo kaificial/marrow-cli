@@ -68,7 +68,9 @@ impl Language {
     pub(crate) fn is_one_element_tuple(self, node: Node) -> bool {
         let tuple_kinds: &[&str] = match self {
             Language::Rust => &["tuple_expression", "tuple_type", "tuple_pattern"],
-            Language::Python => &["tuple", "tuple_pattern"],
+            // A bare tuple, `x = a,` or `return a,` or `x, = pair`, has no brackets, so the
+            // grammar calls it an expression or pattern list.
+            Language::Python => &["tuple", "tuple_pattern", "expression_list", "pattern_list"],
             Language::TypeScript | Language::Tsx => &[],
         };
         if !tuple_kinds.contains(&node.kind()) {

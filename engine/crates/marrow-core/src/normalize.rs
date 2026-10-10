@@ -24,7 +24,7 @@ pub struct Line {
 
 /// Bumped whenever tokenizing or the canonical rules change. Fingerprints from different
 /// versions are never compared (docs/specs/genealogy.md, "Normalizer version").
-pub const NORMALIZER_VERSION: i64 = 1;
+pub const NORMALIZER_VERSION: i64 = 2;
 
 const LINE_START: u64 = 0x6d61_7272_6f77_0001;
 const LINE_END: u64 = 0x6d61_7272_6f77_0002;
@@ -61,7 +61,12 @@ enum Canonical {
     Text(&'static str),
     Lowercase(String),
     Dropped,
-    Comma { tuple: bool },
+    Comma {
+        tuple: bool,
+    },
+    /// A comma ending its line between two items: kept in the token stream reflow reads, left
+    /// out of what the line is matched on.
+    Separator,
 }
 
 struct Frame {
@@ -260,6 +265,12 @@ impl<'a> Tokenizer<'a> {
 
     /// A comma directly before `)`, `]`, or `}` is dropped, unless a one-element tuple needs it
     /// or it follows another comma or an opening bracket.
+    ///
+    /// A comma that ends its line but has another item after it is kept, as a separator: a
+    /// reflowed call only concatenates back to the joined one if the commas between its
+    /// arguments survive the line breaks. But it isn't part of what the line *is*, because
+    /// whether another item follows is the next line's business. Without that, appending an item
+    /// after the last one would change the fingerprint of a line nobody touched.
     fn resolve_trailing_commas(&mut self) {
         let code: Vec<usize> = (0..self.pieces.len())
             .filter(|&index| !self.pieces[index].comment)
@@ -268,14 +279,24 @@ impl<'a> Tokenizer<'a> {
             let Canonical::Comma { tuple } = self.pieces[index].canonical else {
                 continue;
             };
+            let line = self.pieces[index].line;
             let before = position
                 .checked_sub(1)
-                .map(|previous| self.pieces[code[previous]].text);
-            let after = code.get(position + 1).map(|&next| self.pieces[next].text);
-            let trailing = matches!(after, Some(")" | "]" | "}"))
-                && !matches!(before, Some("," | "(" | "[" | "{"));
-            self.pieces[index].canonical = if trailing && !tuple {
+                .map(|previous| &self.pieces[code[previous]]);
+            let after = code.get(position + 1).map(|&next| &self.pieces[next]);
+            let follows_item =
+                !matches!(before.map(|piece| piece.text), Some("," | "(" | "[" | "{"));
+            let closes = matches!(after.map(|next| next.text), Some(")" | "]" | "}"));
+            let ends_line = after.is_none_or(|next| next.line != line);
+            // Only a comma that finishes an item on its own line. A comma alone on a line is all
+            // that line has, so it stays what the line is matched on.
+            let item_on_line = before.is_some_and(|piece| piece.line == line);
+            self.pieces[index].canonical = if tuple || !follows_item {
+                Canonical::Same
+            } else if closes {
                 Canonical::Dropped
+            } else if ends_line && item_on_line {
+                Canonical::Separator
             } else {
                 Canonical::Same
             };
@@ -351,15 +372,23 @@ fn in_for_header(node: Node<'_>) -> bool {
 }
 
 fn has_tokens(pieces: &[&Piece]) -> bool {
-    pieces.iter().any(|piece| canonical_text(piece).is_some())
+    pieces.iter().any(|piece| matched_text(piece).is_some())
 }
 
 fn canonical_text<'p>(piece: &'p Piece<'_>) -> Option<&'p str> {
     match &piece.canonical {
-        Canonical::Same | Canonical::Comma { .. } => Some(piece.text),
+        Canonical::Same | Canonical::Comma { .. } | Canonical::Separator => Some(piece.text),
         Canonical::Text(text) => Some(text),
         Canonical::Lowercase(text) => Some(text),
         Canonical::Dropped => None,
+    }
+}
+
+/// The text a line is matched on: its canonical tokens, less any separator comma at its end.
+fn matched_text<'p>(piece: &'p Piece<'_>) -> Option<&'p str> {
+    match piece.canonical {
+        Canonical::Separator => None,
+        _ => canonical_text(piece),
     }
 }
 
@@ -369,26 +398,33 @@ fn build_line(
     pieces: &[&Piece],
     role: Option<(usize, &'static str)>,
 ) -> Line {
+    // Two views of one line. `tokens` is the stream reflow concatenates, so it keeps separator
+    // commas; everything a line is matched on (fingerprint, unigrams, bigrams) leaves them out.
     let tokens: Vec<u64> = pieces
         .iter()
         .filter_map(|piece| canonical_text(piece))
         .map(|text| xxh3_64(text.as_bytes()))
         .collect();
+    let matched: Vec<u64> = pieces
+        .iter()
+        .filter_map(|piece| matched_text(piece))
+        .map(|text| xxh3_64(text.as_bytes()))
+        .collect();
     let content_tokens = pieces.iter().filter(|piece| is_content(piece.text)).count() as u32;
-    let mut fingerprint_bytes = Vec::with_capacity(1 + tokens.len() * 8);
+    let mut fingerprint_bytes = Vec::with_capacity(1 + matched.len() * 8);
     fingerprint_bytes.push(match kind {
         LineKind::Code => 0,
         LineKind::Comment => 1,
     });
-    for token in &tokens {
+    for token in &matched {
         fingerprint_bytes.extend_from_slice(&token.to_le_bytes());
     }
-    let mut unigrams = tokens.clone();
+    let mut unigrams = matched.clone();
     unigrams.sort_unstable();
     unigrams.dedup();
-    let mut sequence = Vec::with_capacity(tokens.len() + 2);
+    let mut sequence = Vec::with_capacity(matched.len() + 2);
     sequence.push(LINE_START);
-    sequence.extend_from_slice(&tokens);
+    sequence.extend_from_slice(&matched);
     sequence.push(LINE_END);
     let mut bigrams: Vec<u64> = sequence
         .windows(2)
@@ -622,6 +658,67 @@ mod tests {
             canonical("let u = [1,,];\n", Language::TypeScript),
             [vec!["let", "u", "=", "[", "1", ",", ",", "]"]]
         );
+    }
+
+    #[test]
+    fn appending_after_the_last_item_leaves_the_last_item_alone() {
+        // A comma ending a line used to be dropped only while a closing bracket came next, so
+        // appending an item made the untouched line before it look edited, or dead.
+        for (before, after, language) in [
+            (
+                "enum Command {\n    Version,\n}\n",
+                "enum Command {\n    Version,\n    Record,\n}\n",
+                Language::Rust,
+            ),
+            (
+                "x = [\n    1,\n]\n",
+                "x = [\n    1,\n    2,\n]\n",
+                Language::Python,
+            ),
+            (
+                "const x = {\n  a: 1,\n};\n",
+                "const x = {\n  a: 1,\n  b: 2,\n};\n",
+                Language::TypeScript,
+            ),
+        ] {
+            let matched_on = |source| {
+                let line = &normalize(source, language)[1];
+                (line.fingerprint, line.bigrams.clone())
+            };
+            assert_eq!(matched_on(before), matched_on(after), "{language:?}");
+        }
+        assert_eq!(
+            canonical(
+                "enum Command {\n    Version,\n    Record,\n}\n",
+                Language::Rust
+            )[1],
+            ["Version", ","],
+            "reflow still sees the comma between the items"
+        );
+        assert!(
+            !same_fingerprints("t = (\n    x,\n)\n", "t = (\n    x\n)\n", Language::Python),
+            "a one-element tuple still needs its comma, on any line"
+        );
+        for (tuple, value) in [
+            ("x = compute(a, b),\n", "x = compute(a, b)\n"),
+            ("def f():\n    return a,\n", "def f():\n    return a\n"),
+            ("x, = pair\n", "x = pair\n"),
+        ] {
+            assert!(
+                !same_fingerprints(tuple, value, Language::Python),
+                "a bare one-element tuple is not a separator: {tuple:?}"
+            );
+        }
+        let alone = normalize(
+            "result = combine(\n    alpha\n    ,\n    beta\n)\n",
+            Language::Python,
+        );
+        assert_eq!(
+            alone[2].kind,
+            LineKind::Code,
+            "a comma on a line of its own is still a tracked line, and still code"
+        );
+        assert_eq!(alone.len(), 5);
     }
 
     #[test]
