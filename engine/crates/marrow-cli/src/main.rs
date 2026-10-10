@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -7,6 +7,7 @@ mod backfill;
 mod capture;
 mod doctor;
 mod explain;
+mod init;
 mod paths;
 mod reconcile;
 mod record;
@@ -30,6 +31,16 @@ struct Cli {
 enum Command {
     /// Print the engine version.
     Version,
+    /// Start watching the repository in the current directory: create .marrow/, register the
+    /// Claude Code write hook and the post-commit hook, and offer to record the history so far.
+    Init {
+        /// Record the existing history now, without asking.
+        #[arg(long, conflicts_with = "no_backfill")]
+        backfill: bool,
+        /// Don't record the existing history, and don't ask.
+        #[arg(long)]
+        no_backfill: bool,
+    },
     /// Record one agent write: diff the file against its last known state and store the fates.
     Record {
         /// Claude Code session that made the write.
@@ -117,6 +128,10 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some(Command::Trace { repo, json }) => trace(&repo, json),
+        Some(Command::Init {
+            backfill,
+            no_backfill,
+        }) => init_command(backfill, no_backfill),
         Some(Command::Record {
             session,
             file,
@@ -240,6 +255,52 @@ fn record(
             ExitCode::FAILURE
         }
     }
+}
+
+fn init_command(backfill: bool, no_backfill: bool) -> ExitCode {
+    let setup = match init::init() {
+        Ok(setup) => setup,
+        Err(message) => {
+            eprintln!("marrow init: {message}");
+            return ExitCode::FAILURE;
+        }
+    };
+    print!("{}", setup.text);
+    let run_backfill = if backfill {
+        true
+    } else if no_backfill {
+        false
+    } else if std::io::stdin().is_terminal() {
+        ask("Record this repository's history so far, labelled as written by people? [Y/n] ")
+    } else {
+        false
+    };
+    let backfilled = if run_backfill {
+        backfill_command(None) == ExitCode::SUCCESS
+    } else {
+        println!(
+            "Not recording the history so far. To record it, run marrow backfill before the next \
+             commit or agent write; once capture has started, it can't be added \
+             (docs/decisions/0009-backfill.md)."
+        );
+        true
+    };
+    if setup.complete && backfilled {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+/// A yes/no question on the terminal, yes unless the answer starts with n.
+fn ask(question: &str) -> bool {
+    print!("{question}");
+    let _ = std::io::stdout().flush();
+    let mut answer = String::new();
+    if std::io::stdin().read_line(&mut answer).is_err() {
+        return false;
+    }
+    !answer.trim().to_lowercase().starts_with('n')
 }
 
 fn backfill_command(since: Option<&str>) -> ExitCode {
